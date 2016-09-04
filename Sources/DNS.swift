@@ -25,33 +25,20 @@ enum ReturnCode: UInt8 {
 struct Header {
     let id: UInt16
     let response: Bool
-    let operationCode: OperationCode // 4 bit field
+    let operationCode: OperationCode
     let authoritativeAnswer: Bool
     let truncation: Bool
     let recursionDesired: Bool
     let recursionAvailable: Bool
-    //    let reserved: UInt8 // 3 bit field, set to 0
-    let returnCode: ReturnCode // 4 bit field
-}
-
-enum Type: UInt16 {
-    case host = 0x01 // A
-    case nameServer = 0x02 // NS
-    case alias = 0x05 // CNAME
-    case reverseLookup = 0x0C // PTR
-    case mailExchange = 0x0F // MX
-    case service = 0x21 // SRV
-    case incrementalZoneTransfer = 0xFB // IXFR
-    case standardZoneTransfer = 0xFC // AXFR
-    case all = 0xFF
+    let returnCode: ReturnCode
 }
 
 struct Question {
     let name: String
-    let type: Type
+    let type: ResourceRecordType
     let internetClass: UInt16
 
-    init(name: String, type: Type, internetClass: UInt16) {
+    init(name: String, type: ResourceRecordType, internetClass: UInt16) {
         self.name = name
         self.type = type
         self.internetClass = internetClass
@@ -59,32 +46,75 @@ struct Question {
 
     init(unpack data: Data, position: inout Data.Index) {
         name = decodeName(data, position: &position)
-        type = Type(rawValue: UInt16(bytes: data[position..<position+2]))!
+        type = ResourceRecordType(rawValue: UInt16(bytes: data[position..<position+2]))!
         internetClass = UInt16(bytes: data[position+2..<position+4])
         position += 4
     }
 }
 
-enum ResourceRecordData {
-    case ipv4(Data)
-    case ipv6(Data)
+enum ResourceRecordType: UInt16 {
+    case host = 0x0001
+    case nameServer = 0x0002
+    case alias = 0x0005
+    case startOfAuthority = 0x0006
+    case wellKnownSource = 0x000b
+    case reverseLookup = 0x000c
+    case mailExchange = 0x000f
+    case text = 0x0010
+    case host6 = 0x001c
+    case service = 0x0021
+    case incrementalZoneTransfer = 0x00fb
+    case standardZoneTransfer = 0x00fc
+    case all = 0x00ff
 }
+
+enum ResourceRecordData {
+    case host(IPv4)
+    case host6(IPv6)
+    case text(String)
+    case other(ResourceRecordType, Data)
+}
+
+struct IPv4 {
+    let address: UInt32
+
+    init(_ address: UInt32) {
+        self.address = address
+    }
+}
+
+extension IPv4: CustomDebugStringConvertible {
+    var debugDescription: String {
+        return "\(address >> 24 & 0xff).\(address >> 16 & 0xff).\(address >> 8 & 0xff).\(address & 0xff)"
+    }
+}
+
+
+struct IPv6 {
+    let address: Data
+
+    init(_ address: Data) {
+        self.address = address
+    }
+}
+
+extension IPv6: CustomDebugStringConvertible {
+    var debugDescription: String {
+        return (0..<8)
+            .map { address[$0*2..<$0*2+2].hex }
+            .joined(separator: ":")
+    }
+}
+
 
 struct ResourceRecord {
     let name: String
-    let type: Type
     let internetClass: UInt16
     let ttl: UInt32
     let data: ResourceRecordData
+}
 
-    init(name: String, type: Type, internetClass: UInt16, ttl: UInt32, data: ResourceRecordData) {
-        self.name = name
-        self.type = type
-        self.internetClass = internetClass
-        self.ttl = ttl
-        self.data = data
-    }
-
+extension ResourceRecord {
     init(unpack data: Data, position: inout Data.Index) {
         if data[position] & 0xc0 == 0xc0 {
             var pointer = data.index(data.startIndex, offsetBy: Int(UInt16(bytes: data[position..<position+2]) ^ 0xc000))
@@ -93,19 +123,19 @@ struct ResourceRecord {
         } else {
             name = decodeName(data, position: &position)
         }
-        type = Type(rawValue: UInt16(bytes: data[position..<position+2]))!
+        let type = ResourceRecordType(rawValue: UInt16(bytes: data[position..<position+2]))!
         internetClass = UInt16(bytes: data[position+2..<position+4])
         ttl = UInt32(bytes: data[position+4..<position+8])
         let size = Int(UInt16(bytes: data[position+8..<position+10]))
-
+        let rdata = Data(data[position+10..<position+10+size])
         switch type {
-        case .host: self.data = .ipv4(Data(data[position+10..<position+10+size]))
-        case .nameServer: 
-        default: abort()
+        case .host: self.data = .host(IPv4(UInt32(bytes: rdata)))
+        case .host6: self.data = .host6(IPv6(rdata))
+        case .text: self.data = .text(String(bytes: rdata[1..<rdata.endIndex], encoding: .ascii)!)
+        default: self.data = .other(type, rdata)
         }
 
         position += 10 + size
-        print(self)
     }
 }
 
