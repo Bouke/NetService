@@ -201,7 +201,7 @@ extension Message {
         return bytes
     }
 
-    init(unpack bytes: Data) {
+    init(unpackTCP bytes: Data) {
         precondition(bytes.count >= 2)
         let size = Int(UInt16(bytes: bytes[0..<2]))
 
@@ -209,6 +209,10 @@ extension Message {
         var bytes = Data(bytes[2..<2+size]) // copy? :(
         precondition(bytes.count == Int(size))
 
+        self.init(unpack: bytes)
+    }
+
+    init(unpack bytes: Data) {
         let flags = UInt16(bytes: bytes[2..<4])
 
         header = Header(id: UInt16(bytes: bytes[0..<2]),
