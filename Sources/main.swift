@@ -9,8 +9,14 @@ class MyDelegate: NSObject, StreamDelegate {
             buffer.count = buffer.withUnsafeMutableBytes {
                 stream.read($0, maxLength: 1024)
             }
+            print()
             buffer.dump()
-            print(Message(unpack: buffer))
+//            print(Message(unpack: buffer))
+        case (_, Stream.Event.errorOccurred):
+            print(aStream.streamError)
+            print("errorOccurred")
+        case (_, Stream.Event.endEncountered):
+            print("endOccurred")
         default:
             print(aStream, eventCode)
         }
@@ -34,16 +40,19 @@ let INADDR_ANY = in_addr(s_addr: 0)
 //let port = "53"
 
 let socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-if(socketfd == 0) {
-    abort()
-}
+precondition(socketfd != 0)
+var yes: UInt32 = 1
+
+// allow reuse
+precondition(setsockopt(socketfd, SOL_SOCKET, SO_REUSEPORT, &yes, socklen_t(MemoryLayout<UInt32>.size)) == 0)
 
 // setup socket using bsd calls. Then convert to Input/Output Stream and use run loops.
 
 var addr2 = sockaddr_in()
 addr2.sin_family = sa_family_t(AF_INET)
-addr2.sin_port = htons(53)
-inet_pton(AF_INET, "10.0.1.1", &addr2.sin_addr)
+addr2.sin_port = htons(5353)
+addr2.sin_addr = INADDR_ANY
+//inet_pton(AF_INET, "10.0.1.1", &addr2.sin_addr)
 
 let msg = query.pack()
 let addr3 = withUnsafePointer(to: &addr2) {
@@ -59,13 +68,21 @@ let (readStream, writeStream) = { () -> (InputStream, OutputStream) in
     return (reads!.takeRetainedValue() as InputStream, writes!.takeRetainedValue() as OutputStream)
 }()
 
-var size = socklen_t(MemoryLayout<sockaddr_in>.size)
-precondition(connect(socketfd, addr3, size) == 0)
+precondition(connect(socketfd, addr3, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0)
+//precondition(bind(socketfd, addr3, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0)
+
+// request kernel to join multicast group
+var group_addr = in_addr()
+precondition(inet_pton(AF_INET, "224.0.0.251", &group_addr) == 1)
+var mreq = ip_mreq(imr_multiaddr: group_addr, imr_interface: INADDR_ANY)
+precondition(setsockopt(socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, socklen_t(MemoryLayout<ip_mreq>.size)) == 0)
 
 let myDelegate = MyDelegate()
 readStream.open()
 readStream.delegate = myDelegate
 readStream.schedule(in: .main, forMode: .defaultRunLoopMode)
+
+//writeStream.send
 
 writeStream.open()
 print("write", writeStream.write(msg, maxLength: msg.count))
