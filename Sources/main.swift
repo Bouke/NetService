@@ -1,34 +1,12 @@
 import Darwin
 import Foundation
 
-class MyDelegate: NSObject, StreamDelegate {
-    func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
-        switch (aStream, eventCode) {
-        case (let stream as InputStream, Stream.Event.hasBytesAvailable):
-            var buffer = Data(count: 1024)
-            buffer.count = buffer.withUnsafeMutableBytes {
-                stream.read($0, maxLength: 1024)
-            }
-            print()
-            buffer.dump()
-//            print(Message(unpack: buffer))
-        case (_, Stream.Event.errorOccurred):
-            print(aStream.streamError)
-            print("errorOccurred")
-        case (_, Stream.Event.endEncountered):
-            print("endOccurred")
-        default:
-            print(aStream, eventCode)
-        }
-    }
-}
-
 func ntohs(_ value: CUnsignedShort) -> CUnsignedShort {
     return (value << 8) + (value >> 8);
 }
 let htons = ntohs
 
-let query = Message(header: Header(id: 0x1B, response: false, operationCode: .query, authoritativeAnswer: false, truncation: false, recursionDesired: true, recursionAvailable: false, returnCode: .NOERROR), questions: [Question(name: "apple.com", type: .text, internetClass: 1)], answers: [], authorities: [], additional: [])
+let query = Message(header: Header(id: 0x1B, response: false, operationCode: .query, authoritativeAnswer: false, truncation: false, recursionDesired: true, recursionAvailable: false, returnCode: .NOERROR), questions: [Question(name: "_ssh._tcp.local.", type: .text, internetClass: 1)], answers: [], authorities: [], additional: [])
 
 let INADDR_ANY = in_addr(s_addr: 0)
 
@@ -61,15 +39,10 @@ let addr3 = withUnsafePointer(to: &addr2) {
     }
 }
 
-let (readStream, writeStream) = { () -> (InputStream, OutputStream) in
-    var reads: Unmanaged<CFReadStream>? = nil
-    var writes: Unmanaged<CFWriteStream>? = nil
-    CFStreamCreatePairWithSocket(kCFAllocatorDefault, socketfd, &reads, &writes)
-    return (reads!.takeRetainedValue() as InputStream, writes!.takeRetainedValue() as OutputStream)
-}()
+precondition(bind(socketfd, addr3, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0)
 
-precondition(connect(socketfd, addr3, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0)
-//precondition(bind(socketfd, addr3, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0)
+// connect fixates the other party; not desired! -- need to receive from various parties
+//precondition(connect(socketfd, addr3, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0)
 
 // request kernel to join multicast group
 var group_addr = in_addr()
@@ -77,80 +50,28 @@ precondition(inet_pton(AF_INET, "224.0.0.251", &group_addr) == 1)
 var mreq = ip_mreq(imr_multiaddr: group_addr, imr_interface: INADDR_ANY)
 precondition(setsockopt(socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, socklen_t(MemoryLayout<ip_mreq>.size)) == 0)
 
-let myDelegate = MyDelegate()
-readStream.open()
-readStream.delegate = myDelegate
-readStream.schedule(in: .main, forMode: .defaultRunLoopMode)
 
-//writeStream.send
+// @todo use CFSocketCreate instead (for creating the CFSocket)
+//CFSocketCallBack
+let connection = CFSocketCreateWithNative(kCFAllocatorDefault, socketfd, CFSocketCallBackType.dataCallBack.rawValue, { a in
+    print(a)
+}, nil)
 
-writeStream.open()
-print("write", writeStream.write(msg, maxLength: msg.count))
+let source = CFSocketCreateRunLoopSource(nil, connection, 0)
+CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.defaultMode)
 
-withExtendedLifetime((myDelegate, readStream)) {
-    RunLoop.main.run()
-    print(myDelegate)
+var dest = sockaddr_in()
+dest.sin_family = sa_family_t(AF_INET)
+dest.sin_addr = group_addr
+dest.sin_port = htons(5353)
+
+let dest2 = withUnsafePointer(to: &dest) {
+    $0.withMemoryRebound(to: UInt8.self, capacity: MemoryLayout<sockaddr_in>.size) {
+        CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, $0, MemoryLayout<sockaddr_in>.size, kCFAllocatorDefault)
+    }
 }
+let msg2 = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, msg, msg.count, kCFAllocatorDefault)
 
-//var info = addrinfo()
-//info.ai_protocol = IPPROTO_UDP
-//var result: UnsafeMutablePointer<addrinfo>? = nil
-//if(getaddrinfo(host, port, &info, &result) != 0) {
-//    abort()
-//}
-//var res = result
-//while res != nil {
-//    if res?.pointee.ai_family == AF_INET {
-//        var buffer = UnsafeMutablePointer<CChar>.allocate(capacity: Int(INET_ADDRSTRLEN))
-//        var sa = res!.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-//            return $0.pointee
-//        }
-//        if inet_ntop(res!.pointee.ai_family,
-//                     &sa.sin_addr, buffer, UInt32(INET_ADDRSTRLEN)) != nil {
-//            let ipAddress = String(validatingUTF8: buffer)
-//            print("IPv4 \(ipAddress) for host \(host):\(port)")
-//        }
-//    } else if res!.pointee.ai_family == AF_INET6 {
-//        var buffer = UnsafeMutablePointer<Int8>.allocate(capacity: Int(INET6_ADDRSTRLEN))
-//        var sa = res!.pointee.ai_addr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-//            return $0.pointee
-//        }
-//        if inet_ntop(res!.pointee.ai_family,
-//                     &sa.sin6_addr, buffer, UInt32(INET6_ADDRSTRLEN)) != nil {
-//            let ipAddress = String(validatingUTF8: buffer)
-//            print("IPv6 \(ipAddress) for host \(host):\(port)")
-//        }
-//    }
-//    res = res!.pointee.ai_next
-//}
-//
-//freeaddrinfo(result)
+precondition(CFSocketSendData(connection, dest2, msg2, 2) == .success)
 
-//print(info)
-//print(result?.pointee.ai_addr)
-
-// tcp
-//
-//import Foundation
-//
-//var input: InputStream?
-//var output: OutputStream?
-//
-//Stream.getStreamsToHost(withName: "10.0.1.1", port: 53, inputStream: &input, outputStream: &output)
-//
-//input!.open()
-//output!.open()
-//
-//var writeBuffer = query.tcp()
-//Data(bytes: query.tcp()).dump()
-//assert(output!.write(&writeBuffer, maxLength: writeBuffer.count) == writeBuffer.count)
-//
-//usleep(30_000)
-//while input!.hasBytesAvailable {
-//    var readBuffer = Data(count: 1024)
-//    readBuffer.count = readBuffer.withUnsafeMutableBytes { bytes in
-//        input!.read(bytes, maxLength: readBuffer.count)
-//    }
-//    readBuffer.dump()
-//    print(Message(unpack: readBuffer))
-//}
+CFRunLoopRun()
