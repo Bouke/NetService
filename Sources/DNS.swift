@@ -1,6 +1,6 @@
 import Foundation
 
-enum Error: Swift.Error {
+enum EncodeError: Swift.Error {
     case unicodeEncodingNotSupported
 }
 
@@ -33,21 +33,33 @@ struct Header {
     let returnCode: ReturnCode
 }
 
+extension Header: CustomDebugStringConvertible {
+    var debugDescription: String {
+        switch response {
+        case false: return "DNS Request Header(id: \(id), authoritativeAnswer: \(authoritativeAnswer), truncation: \(truncation), recursionDesired: \(recursionDesired), recursionAvailable: \(recursionAvailable))"
+        case true: return "DNS Response Header(id: \(id), returnCode: \(returnCode), authoritativeAnswer: \(authoritativeAnswer), truncation: \(truncation), recursionDesired: \(recursionDesired), recursionAvailable: \(recursionAvailable))"
+        }
+    }
+}
+
 struct Question {
     let name: String
     let type: ResourceRecordType
+    let unique: Bool
     let internetClass: UInt16
 
-    init(name: String, type: ResourceRecordType, internetClass: UInt16) {
+    init(name: String, type: ResourceRecordType, unique: Bool = false, internetClass: UInt16) {
         self.name = name
         self.type = type
+        self.unique = unique
         self.internetClass = internetClass
     }
 
     init(unpack data: Data, position: inout Data.Index) {
         name = decodeName(data, position: &position)
         type = ResourceRecordType(rawValue: UInt16(bytes: data[position..<position+2]))!
-        internetClass = UInt16(bytes: data[position+2..<position+4])
+        unique = data[position+2] & 0x80 == 0x80
+        internetClass = UInt16(bytes: data[position+2..<position+4]) & 0x7fff
         position += 4
     }
 }
@@ -71,8 +83,12 @@ enum ResourceRecordType: UInt16 {
 enum ResourceRecordData {
     case host(IPv4)
     case host6(IPv6)
-    case text(String)
+    case reverseLookup(String)
+    case service(UInt16, UInt16, UInt16, String) // priority, weight, port, server
+//    case service(String)
+    case text([String: String])
     case other(ResourceRecordType, Data)
+    case unknown(UInt16, Data)
 }
 
 struct IPv4 {
@@ -109,6 +125,7 @@ extension IPv6: CustomDebugStringConvertible {
 
 struct ResourceRecord {
     let name: String
+    let unique: Bool
     let internetClass: UInt16
     let ttl: UInt32
     let data: ResourceRecordData
@@ -116,26 +133,45 @@ struct ResourceRecord {
 
 extension ResourceRecord {
     init(unpack data: Data, position: inout Data.Index) {
-        if data[position] & 0xc0 == 0xc0 {
-            var pointer = data.index(data.startIndex, offsetBy: Int(UInt16(bytes: data[position..<position+2]) ^ 0xc000))
-            name = decodeName(data, position: &pointer)
-            position += 2
-        } else {
-            name = decodeName(data, position: &position)
-        }
-        let type = ResourceRecordType(rawValue: UInt16(bytes: data[position..<position+2]))!
-        internetClass = UInt16(bytes: data[position+2..<position+4])
+        name = decodeName(data, position: &position)
+        let type = UInt16(bytes: data[position..<position+2])
+        unique = data[position+2] & 0x80 == 0x80
+        internetClass = UInt16(bytes: data[position+2..<position+4]) & 0x7fff
         ttl = UInt32(bytes: data[position+4..<position+8])
-        let size = Int(UInt16(bytes: data[position+8..<position+10]))
-        let rdata = Data(data[position+10..<position+10+size])
-        switch type {
-        case .host: self.data = .host(IPv4(UInt32(bytes: rdata)))
-        case .host6: self.data = .host6(IPv6(rdata))
-        case .text: self.data = .text(String(bytes: rdata[1..<rdata.endIndex], encoding: .ascii)!)
-        default: self.data = .other(type, rdata)
+        let rsize = Int(UInt16(bytes: data[position+8..<position+10]))
+        let rdata = Data(data[position+10..<position+10+rsize])
+        switch ResourceRecordType(rawValue: type) {
+        case .host?: self.data = .host(IPv4(UInt32(bytes: rdata)))
+        case .host6?: self.data = .host6(IPv6(rdata))
+        case .reverseLookup?:
+            var ptr = position+10
+            self.data = .reverseLookup(decodeName(data, position: &ptr))
+        case .service?:
+            let priority = UInt16(bytes: data[position+10..<position+12])
+            let weight = UInt16(bytes: data[position+12..<position+14])
+            let port = UInt16(bytes: data[position+14..<position+16])
+            var pos2 = position + 16
+            let server = decodeName(data, position: &pos2)
+            self.data = .service(priority, weight, port, server)
+        case .text?:
+            var pos2 = position+10
+            var keyValues = [String: String]()
+            while pos2 < position+10+rsize {
+                let keyValueSize = Int(data[pos2])
+                if keyValueSize == 0 { break }
+                pos2 += 1
+                let keyValue = String(bytes: data[pos2..<pos2+keyValueSize], encoding: .ascii)!
+                let keyValue2 = keyValue.characters.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map { String($0) }
+                keyValues[keyValue2[0]] = keyValue2[1]
+                pos2 += keyValueSize
+            }
+            self.data = .text(keyValues)
+        case let type?:
+            self.data = .other(type, rdata)
+        default: self.data = .unknown(type, rdata)
         }
 
-        position += 10 + size
+        position += 10 + rsize
     }
 }
 
@@ -149,7 +185,7 @@ struct Message {
 
 func encodeName(_ name: String) throws -> [UInt8] {
     if name.utf8.reduce(false, { $0 || $1 & 128 == 128 }) {
-        throw Error.unicodeEncodingNotSupported
+        throw EncodeError.unicodeEncodingNotSupported
     }
     var bytes: [UInt8] = []
     for label in name.components(separatedBy: ".") {
@@ -162,12 +198,22 @@ func encodeName(_ name: String) throws -> [UInt8] {
 
 func decodeName(_ data: Data, position: inout Data.Index) -> String {
     var components = [String]()
-    while position < data.endIndex {
+    while true {
         let step = data[position]
+        if step & 0xc0 == 0xc0 {
+            var pointer = data.index(data.startIndex, offsetBy: Int(UInt16(bytes: data[position..<position+2]) ^ 0xc000))
+            components += decodeName(data, position: &pointer).components(separatedBy: ".")
+            position += 2
+            break
+        }
+
         let start = data.index(position, offsetBy: 1)
         let end = data.index(start, offsetBy: Int(step))
         if step > 0 {
-            components.append(String(bytes: data[start..<end], encoding: .ascii)!)
+            for byte in data[start..<end] {
+                precondition((0x20..<0xff).contains(byte))
+            }
+            components.append(String(bytes: data[start..<end], encoding: .utf8)!)
         } else {
             position = end
             break
