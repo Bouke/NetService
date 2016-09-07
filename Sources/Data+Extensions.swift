@@ -45,7 +45,8 @@ extension RandomAccessCollection where Iterator.Element == UInt8, Index == Int {
         while start < endIndex {
             _ = formIndex(&end, offsetBy: 24, limitedBy: endIndex)
 
-            print(UInt32(distance(from: startIndex, to: start).toIntMax()).bytes.hex, terminator: ":  ")
+//            print(UInt32(distance(from: startIndex, to: start).toIntMax()).bytes.hex, terminator: ":  ")
+            print(String(format: "% 4d:  ", UInt32(distance(from: startIndex, to: start).toIntMax())), terminator: "")
 
             var byteStart = start
             for pos in 0..<24 {
