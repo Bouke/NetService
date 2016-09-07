@@ -12,7 +12,13 @@ func ntohs(_ value: CUnsignedShort) -> CUnsignedShort {
 }
 let htons = ntohs
 
-let query = Message(header: Header(id: 0, response: false, operationCode: .query, authoritativeAnswer: false, truncation: false, recursionDesired: false, recursionAvailable: false, returnCode: .NOERROR), questions: [Question(name: "_ssh._tcp.local", type: .reverseLookup, unique: true, internetClass: 1)], answers: [], authorities: [], additional: [])
+// all services: _services._dns-sd._udp.local
+
+let query = Message(header: Header(id: 0, response: false, operationCode: .query, authoritativeAnswer: false, truncation: false, recursionDesired: false, recursionAvailable: false, returnCode: .NOERROR),
+                    questions: [Question(name: "_ssh._tcp.local", type: .reverseLookup, unique: false, internetClass: 1)],
+                    answers: [],
+                    authorities: [],
+                    additional: [])
 
 let INADDR_ANY = in_addr(s_addr: 0)
 
@@ -43,6 +49,19 @@ precondition(inet_pton(AF_INET, "224.0.0.251", &group_addr) == 1)
 var mreq = ip_mreq(imr_multiaddr: group_addr, imr_interface: INADDR_ANY)
 try posix(setsockopt(socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
 
+struct Service {
+    let name: String
+    var port: UInt16
+    var hostname: String
+    var ttl: UInt32
+}
+
+// @todo refactor IPvX into single generic IP struct
+enum IP {
+    case v4(IPv4)
+    case v6(IPv6)
+}
+
 // @todo use CFSocketCreate instead (for creating the CFSocket)
 //CFSocketCallBack
 let connection = CFSocketCreateWithNative(kCFAllocatorDefault, socketfd, CFSocketCallBackType.dataCallBack.rawValue, { (s, callbackType, address, data, info) in
@@ -52,16 +71,25 @@ let connection = CFSocketCreateWithNative(kCFAllocatorDefault, socketfd, CFSocke
     for question in message.questions {
         print("  ? Question:   \(question)")
     }
+    var newServices = [String: Service]()
     for answer in message.answers {
+        if case .reverseLookup(let name) = answer.data {
+            newServices[name] = Service(name: name, port: 0, hostname: "", ttl: answer.ttl)
+        }
         print("  ! Answer:     \(answer)")
     }
     for authority in message.authorities {
         print("  # Authority:  \(authority)")
     }
     for additional in message.additional {
+        if case .service(_, _, let port, let hostname) = additional.data {
+            newServices[additional.name]!.port = port
+            newServices[additional.name]!.hostname = hostname
+        }
         print("  … Additional: \(additional)")
     }
 
+    print(newServices)
     print()
 }, nil)
 
@@ -80,6 +108,6 @@ let dest2 = withUnsafePointer(to: &dest) {
 }
 let msg2 = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, msg, msg.count, kCFAllocatorDefault)
 
-//precondition(CFSocketSendData(connection, dest2, msg2, 2) == .success)
+precondition(CFSocketSendData(connection, dest2, msg2, 2) == .success)
 
 CFRunLoopRun()
