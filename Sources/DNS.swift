@@ -171,7 +171,7 @@ extension ServiceRecord {
 extension TextRecord {
     init(unpack data: Data, position: inout Data.Index, common: RecordCommonFields) {
         (name, _, unique, internetClass, ttl) = common
-        let endIndex = position + Int(unpack(data, &position) as UInt16)
+        let endIndex = Int(unpack(data, &position) as UInt16) + position
 
         var attrs = [String: String]()
         while position < endIndex {
