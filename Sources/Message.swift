@@ -156,3 +156,14 @@ struct PointerRecord: ResourceRecord {
     var ttl: UInt32
     let destination: String
 }
+
+
+extension PointerRecord: Hashable {
+    var hashValue: Int {
+        return destination.hashValue
+    }
+
+    static func == (lhs: PointerRecord, rhs: PointerRecord) -> Bool {
+        return lhs.name == rhs.name && lhs.destination == rhs.destination
+    }
+}

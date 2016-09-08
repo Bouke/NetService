@@ -49,7 +49,7 @@ precondition(inet_pton(AF_INET, "224.0.0.251", &group_addr) == 1)
 var mreq = ip_mreq(imr_multiaddr: group_addr, imr_interface: INADDR_ANY)
 try posix(setsockopt(socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
 
-
+var pointers = Set<PointerRecord>()
 var services = Set<ServiceRecord>()
 
 // @todo use CFSocketCreate instead (for creating the CFSocket)
@@ -62,8 +62,15 @@ let connection = CFSocketCreateWithNative(kCFAllocatorDefault, socketfd, CFSocke
         print("  ? Question:   \(question)")
     }
 
+    var newPointers = Set<PointerRecord>()
     var newServices = Set<ServiceRecord>()
     for answer in message.answers {
+        if let answer = answer as? ServiceRecord {
+            newServices.insert(answer)
+        }
+        if let answer = answer as? PointerRecord {
+            newPointers.insert(answer)
+        }
         print("  ! Answer:     \(answer)")
     }
     for authority in message.authorities {
@@ -73,11 +80,18 @@ let connection = CFSocketCreateWithNative(kCFAllocatorDefault, socketfd, CFSocke
         if let additional = additional as? ServiceRecord {
             newServices.insert(additional)
         }
+        if let additional = additional as? PointerRecord {
+            newPointers.insert(additional)
+        }
         print("  … Additional: \(additional)")
     }
 
-    print(newServices.subtract(services))
-    print()
+    print("Added: ", newServices.subtract(services))
+    print("Added: ", newPointers.subtract(pointers))
+    services = newServices.union(services) // overwrite ttl
+    pointers = newPointers.union(pointers)
+    print("Services: ", services)
+    print("Pointers: ", pointers)
 }, nil)
 
 let source = CFSocketCreateRunLoopSource(nil, connection, 0)
