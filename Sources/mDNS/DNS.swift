@@ -33,6 +33,21 @@ func unpackName(_ data: Data, _ position: inout Data.Index) -> String {
 }
 
 
+func packName(_ name: String) throws -> Data {
+    if name.utf8.reduce(false, { $0 || $1 & 128 == 128 }) {
+        throw EncodeError.unicodeEncodingNotSupported
+    }
+    var bytes: [UInt8] = []
+    for label in name.components(separatedBy: ".") {
+        let codes = Array(label.utf8)
+        bytes += [UInt8(codes.count)] + codes
+    }
+    bytes.append(0)
+    return Data(bytes)
+}
+
+
+
 func unpack<T: Integer>(_ data: Data, _ position: inout Data.Index) -> T {
     let size = MemoryLayout<T>.size
     defer { position += size }
@@ -40,20 +55,24 @@ func unpack<T: Integer>(_ data: Data, _ position: inout Data.Index) -> T {
 }
 
 
-typealias RecordCommonFields = (name: String, type: ResourceRecordType?, unique: Bool, internetClass: UInt16, ttl: UInt32)
+typealias RecordCommonFields = (name: String, type: UInt16, unique: Bool, internetClass: UInt16, ttl: UInt32)
 
 func unpackRecordCommonFields(_ data: Data, _ position: inout Data.Index) -> RecordCommonFields {
     return (unpackName(data, &position),
-            ResourceRecordType(rawValue: unpack(data, &position)),
+            unpack(data, &position),
             data[position] & 0x80 == 0x80,
             unpack(data, &position),
             unpack(data, &position))
 }
 
+func packRecordCommonFields(_ common: RecordCommonFields) throws -> Data {
+    return try packName(common.name) + common.type.bytes + (common.internetClass | (common.unique ? 0x8000 : 0)).bytes + common.ttl.bytes
+}
+
 
 func unpackRecord(_ data: Data, _ position: inout Data.Index) -> ResourceRecord {
     let common = unpackRecordCommonFields(data, &position)
-    switch common.type {
+    switch ResourceRecordType(rawValue: common.type) {
     case .host?: return HostRecord<IPv4>(unpack: data, position: &position, common: common)
     case .host6?: return HostRecord<IPv6>(unpack: data, position: &position, common: common)
     case .service?: return ServiceRecord(unpack: data, position: &position, common: common)
@@ -64,22 +83,8 @@ func unpackRecord(_ data: Data, _ position: inout Data.Index) -> ResourceRecord 
 }
 
 
-func encodeName(_ name: String) throws -> [UInt8] {
-    if name.utf8.reduce(false, { $0 || $1 & 128 == 128 }) {
-        throw EncodeError.unicodeEncodingNotSupported
-    }
-    var bytes: [UInt8] = []
-    for label in name.components(separatedBy: ".") {
-        let codes = Array(label.utf8)
-        bytes += [UInt8(codes.count)] + codes
-    }
-    bytes.append(0)
-    return bytes
-}
-
-
 extension Message {
-    func pack() -> [UInt8] {
+    public func pack() throws -> [UInt8] {
         var bytes: [UInt8] = []
 
         let flags: UInt16 = (header.response ? 1 : 0) << 15 | UInt16(header.operationCode.rawValue) << 11 | (header.authoritativeAnswer ? 1 : 0) << 10 | (header.truncation ? 1 : 0) << 9 | (header.recursionDesired ? 1 : 0) << 8 | (header.recursionAvailable ? 1 : 0) << 7 | UInt16(header.returnCode.rawValue)
@@ -94,15 +99,26 @@ extension Message {
 
         // questions
         for question in questions {
-            bytes += try! encodeName(question.name)
+            bytes += try! packName(question.name)
             bytes += question.type.rawValue.bytes
             bytes += question.internetClass.bytes
         }
 
+        for answer in answers {
+            bytes += try answer.pack()
+        }
+        for authority in authorities {
+            bytes += try authority.pack()
+        }
+        for additional in additional {
+            bytes += try additional.pack()
+        }
+
+
         return bytes
     }
 
-    init(unpackTCP bytes: Data) {
+    public init(unpackTCP bytes: Data) {
         precondition(bytes.count >= 2)
         let size = Int(UInt16(bytes: bytes[0..<2]))
 
@@ -113,7 +129,8 @@ extension Message {
         self.init(unpack: bytes)
     }
 
-    init(unpack bytes: Data) {
+    public init(unpack bytes: Data) {
+        bytes.dump()
         let flags = UInt16(bytes: bytes[2..<4])
 
         header = Header(id: UInt16(bytes: bytes[0..<2]),
@@ -133,31 +150,44 @@ extension Message {
         additional = (0..<UInt16(bytes: bytes[10..<12])).map { _ in unpackRecord(bytes, &position) }
     }
 
-    func tcp() -> [UInt8] {
-        let payload = self.pack()
+    func tcp() throws -> [UInt8] {
+        let payload = try self.pack()
         return UInt16(payload.count).bytes + payload
     }
 }
 
-extension Record {
+extension Record: ResourceRecord {
     init(unpack data: Data, position: inout Data.Index, common: RecordCommonFields) {
         (name, type, unique, internetClass, ttl) = common
         let size = Int(unpack(data, &position) as UInt16)
         self.data = Data(data[position..<position+size])
         position += size
     }
-}
 
-extension HostRecord {
-    init(unpack data: Data, position: inout Data.Index, common: RecordCommonFields) {
-        (name, _, unique, internetClass, ttl) = common
-        let size = Int(unpack(data, &position) as UInt16)
-        ip = IPType(Data(data[position..<position+size]))
-        position += size
+    public func pack() throws -> Data {
+        return try packRecordCommonFields((name, type, unique, internetClass, ttl)) + UInt16(data.count).bytes + data
     }
 }
 
-extension ServiceRecord {
+extension HostRecord: ResourceRecord {
+    init(unpack data: Data, position: inout Data.Index, common: RecordCommonFields) {
+        (name, _, unique, internetClass, ttl) = common
+        let size = Int(unpack(data, &position) as UInt16)
+        ip = IPType(networkBytes: Data(data[position..<position+size]))!
+        position += size
+    }
+
+    public func pack() throws -> Data {
+        switch ip {
+        case let ip as IPv4:
+            return try packRecordCommonFields((name, ResourceRecordType.host.rawValue, unique, internetClass, ttl)) + UInt16(4).bytes + ip.bytes
+        default:
+            abort()
+        }
+    }
+}
+
+extension ServiceRecord: ResourceRecord {
     init(unpack data: Data, position: inout Data.Index, common: RecordCommonFields) {
         (name, _, unique, internetClass, ttl) = common
         _ = unpack(data, &position) as UInt16
@@ -166,9 +196,15 @@ extension ServiceRecord {
         port = unpack(data, &position)
         server = unpackName(data, &position)
     }
+
+    public func pack() throws -> Data {
+        let data = try priority.bytes + weight.bytes + port.bytes + packName(server)
+
+         return try packRecordCommonFields((name, ResourceRecordType.service.rawValue, unique, internetClass, ttl)) + UInt16(data.count).bytes + data
+    }
 }
 
-extension TextRecord {
+extension TextRecord: ResourceRecord {
     init(unpack data: Data, position: inout Data.Index, common: RecordCommonFields) {
         (name, _, unique, internetClass, ttl) = common
         let endIndex = Int(unpack(data, &position) as UInt16) + position
@@ -177,18 +213,32 @@ extension TextRecord {
         while position < endIndex {
             let size = Int(unpack(data, &position) as UInt8)
             guard size > 0 else { break }
-            var attr = String(bytes: data[position..<position+size], encoding: .utf8)!.characters.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: true).map { String($0) }
+            var attr = String(bytes: data[position..<position+size], encoding: .utf8)!.characters.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map { String($0) }
             attrs[attr[0]] = attr[1]
             position += size
         }
         self.attributes = attrs
     }
+
+    public func pack() throws -> Data {
+        let data = attributes.reduce(Data()) {
+            let attr = "\($1.key)=\($1.value)".utf8
+            return $0 + UInt8(attr.count).bytes + attr
+        }
+
+        return try packRecordCommonFields((name, ResourceRecordType.text.rawValue, unique, internetClass, ttl)) + UInt16(data.count).bytes + data
+    }
 }
 
-extension PointerRecord {
+extension PointerRecord: ResourceRecord {
     init(unpack data: Data, position: inout Data.Index, common: RecordCommonFields) {
         (name, _, unique, internetClass, ttl) = common
         position += 2
         destination = unpackName(data, &position)
+    }
+
+    public func pack() throws -> Data {
+        let data = try packName(destination)
+        return try packRecordCommonFields((name, ResourceRecordType.pointer.rawValue, unique, internetClass, ttl)) + UInt16(data.count).bytes + data
     }
 }
