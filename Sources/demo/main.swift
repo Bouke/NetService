@@ -115,13 +115,11 @@ func createIP(data: CFData) -> IP? {
     }
     switch generic.sa_family {
     case sa_family_t(AF_INET):
-        return CFDataGetBytePtr(data).withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-            IPv4(address: $0.pointee.sin_addr)
-        }
+        let ipv4 = unsafeBitCast(generic, to: sockaddr_in.self)
+        return IPv4(address: ipv4.sin_addr)
     case sa_family_t(AF_INET6):
-        return CFDataGetBytePtr(data).withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-            IPv6(address: $0.pointee.sin6_addr)
-        }
+        let ipv6 = unsafeBitCast(generic, to: sockaddr_in6.self)
+        return IPv6(address: ipv6.sin6_addr)
     default:
         return nil
     }
