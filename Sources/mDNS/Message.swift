@@ -195,6 +195,7 @@ public struct TextRecord {
     public let internetClass: UInt16
     public var ttl: UInt32
     var attributes: [String: String]
+    var values: [String]
 
     public init(name: String, unique: Bool, internetClass: UInt16, ttl: UInt32, attributes: [String: String]) {
         self.name = name
@@ -202,6 +203,7 @@ public struct TextRecord {
         self.internetClass = internetClass
         self.ttl = ttl
         self.attributes = attributes
+        self.values = []
     }
 }
 

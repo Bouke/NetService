@@ -210,14 +210,20 @@ extension TextRecord: ResourceRecord {
         let endIndex = Int(unpack(data, &position) as UInt16) + position
 
         var attrs = [String: String]()
+        var other = [String]()
         while position < endIndex {
             let size = Int(unpack(data, &position) as UInt8)
             guard size > 0 else { break }
             var attr = String(bytes: data[position..<position+size], encoding: .utf8)!.characters.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map { String($0) }
-            attrs[attr[0]] = attr[1]
+            if attr.count == 2 {
+                attrs[attr[0]] = attr[1]
+            } else {
+                other.append(attr[0])
+            }
             position += size
         }
         self.attributes = attrs
+        self.values = other
     }
 
     public func pack() throws -> Data {
