@@ -108,14 +108,6 @@ func broadcastService() {
 var pointers = Set<PointerRecord>()
 var services = Set<ServiceRecord>()
 
-//func cast<T>(_ a: Data) -> T {
-//    var a = a
-//    return a.withUnsafeMutableBytes {
-//        $0.withMemoryRebound(to: T.self, capacity: 1) {
-//            $0.pointee
-//        }
-//    }
-//}
 
 func createIP(data: CFData) -> IP? {
     let generic = CFDataGetBytePtr(data).withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -181,13 +173,8 @@ connection = CFSocketCreateWithNative(kCFAllocatorDefault, socketfd, CFSocketCal
         print("  … Additional: \(additional)")
     }
 
-
-//    print("Added: ", newServices.subtract(services))
-//    print("Added: ", newPointers.subtract(pointers))
     services = newServices.union(services) // overwrite ttl
     pointers = newPointers.union(pointers)
-//    print("Services: ", services)
-//    print("Pointers: ", pointers)
 }, nil)
 
 let source = CFSocketCreateRunLoopSource(nil, connection, 0)
