@@ -198,6 +198,8 @@ timer.resume()
 
 broadcastService()
 
+print(Responder.shared.start())
+
 RunLoop.main.run()
 
 
