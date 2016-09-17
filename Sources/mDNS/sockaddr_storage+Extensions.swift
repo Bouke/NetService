@@ -130,6 +130,7 @@ extension sockaddr_storage {
         precondition(MemoryLayout<AddrType>.size <= MemoryLayout<sockaddr_storage>.size)
         // We need a mutable `sockaddr_storage` so that we can pass it to `withUnsafePointer(to:_:)`.
         var ss = sockaddr_storage()
+        ss.ss_len = __uint8_t(MemoryLayout<AddrType>.size)
         let result = try withUnsafePointer(to: &ss) {
             try $0.withMemoryRebound(to: AddrType.self, capacity: 1) {
                 try body(&$0.pointee)
