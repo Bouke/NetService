@@ -4,6 +4,6 @@ let package = Package(
     name: "mDNS",
     targets: [
         Target(name: "demo", dependencies: ["mDNS"]),
-        Target(name: "mDNS"),
+        Target(name: "mDNS", dependencies: ["Cifaddrs"])
     ]
 )

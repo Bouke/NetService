@@ -20,29 +20,31 @@ class Client {
         channel.received = { (address, data, socket) in
             let message = Message(unpack: data)
 
-            for listener in self.listeners {
-                listener.received(message: message)
-            }
-
-            var answers = [ResourceRecord]()
-            var authorities = [ResourceRecord]()
-            var additional = [ResourceRecord]()
-
-            for responder in self.responders {
-                guard let response = responder.respond(toMessage: message) else {
-                    continue
+            if message.header.response {
+                for listener in self.listeners {
+                    listener.received(message: message)
                 }
-                answers += response.answers
-                authorities += response.authorities
-                additional += response.additional
-            }
+            } else {
+                var answers = [ResourceRecord]()
+                var authorities = [ResourceRecord]()
+                var additional = [ResourceRecord]()
 
-            guard answers.count > 0 else {
-                return
-            }
+                for responder in self.responders {
+                    guard let response = responder.respond(toMessage: message) else {
+                        continue
+                    }
+                    answers += response.answers
+                    authorities += response.authorities
+                    additional += response.additional
+                }
 
-            let response = Message(header: Header(response: true), answers: answers, authorities: authorities, additional: additional)
-            self.multicast(message: response)
+                guard answers.count > 0 else {
+                    return
+                }
+
+                let response = Message(header: Header(response: true), answers: answers, authorities: authorities, additional: additional)
+                self.multicast(message: response)
+            }
         }
     }
 

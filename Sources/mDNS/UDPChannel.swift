@@ -128,6 +128,17 @@ extension SockAddr {
         }
     }
 
+    func withSockAddrType<AddrType, ReturnType>(_ body: (_ sax: inout AddrType) throws -> ReturnType) rethrows -> ReturnType {
+        precondition(MemoryLayout<AddrType>.size <= MemoryLayout<sockaddr_storage>.size)
+        // We need to create a mutable copy of `self` so that we can pass it to `withUnsafePointer(to:_:)`.
+        var ss = self
+        return try withUnsafeMutablePointer(to: &ss) {
+            try $0.withMemoryRebound(to: AddrType.self, capacity: 1) {
+                try body(&$0.pointee)
+            }
+        }
+    }
+
     public var debugDescription: String {
         return withSockAddr { (sa, saLen) in
             var name = Data(count: Int(NI_MAXHOST))
@@ -139,7 +150,28 @@ extension SockAddr {
     }
 }
 
-extension sockaddr_storage: SockAddr, CustomDebugStringConvertible {}
+extension sockaddr_storage: SockAddr, CustomDebugStringConvertible {
+    init?(fromSockAddr sock: sockaddr) {
+        switch sock.sa_family {
+        case sa_family_t(AF_INET):
+            self = sock.withSockAddrType { (src: inout sockaddr_in) in
+                sockaddr_storage.fromSockAddr { (dst: inout sockaddr_in) in
+                    dst.sin_family = src.sin_family
+                    dst.sin_addr = src.sin_addr
+                }.1
+            }
+        case sa_family_t(AF_INET6):
+            self = sock.withSockAddrType { (src: inout sockaddr_in6) in
+                sockaddr_storage.fromSockAddr { (dst: inout sockaddr_in6) in
+                    dst.sin6_family = src.sin6_family
+                    dst.sin6_addr = src.sin6_addr
+                }.1
+            }
+        default: return nil
+        }
+    }
+}
 
+extension sockaddr: SockAddr, CustomDebugStringConvertible { }
 extension sockaddr_in: SockAddr, CustomDebugStringConvertible { }
 extension sockaddr_in6: SockAddr, CustomDebugStringConvertible { }

@@ -19,7 +19,7 @@ import mDNS
 //
 //let msg = Message(header: Header(id: 0, response: true, operationCode: .query, authoritativeAnswer: true, truncation: false, recursionDesired: false, recursionAvailable: false, returnCode: .NOERROR), questions: [], answers: [hapPointer], authorities: [], additional: [hapService, hapHost, hapInfo])
 
-class MyDelegate: mDNS.NetServiceBrowserDelegate {
+class MyBrowserDelegate: mDNS.NetServiceBrowserDelegate {
     public func netServiceBrowser(_ browser: mDNS.NetServiceBrowser, didFind service: mDNS.NetService, moreComing: Bool) {
         print("Did find: \(service)")
     }
@@ -34,15 +34,28 @@ class MyDelegate: mDNS.NetServiceBrowserDelegate {
 }
 
 let browser0 = mDNS.NetServiceBrowser()
-browser0.searchForServices(ofType: "_airplay._tcp", inDomain: "local")
+//browser0.searchForServices(ofType: "_airplay._tcp", inDomain: "local")
 
 let browser1 = mDNS.NetServiceBrowser()
-browser1.searchForServices(ofType: "_adisk._tcp", inDomain: "local")
+//browser1.searchForServices(ofType: "_adisk._tcp", inDomain: "local")
 
-let delegate = MyDelegate()
-browser0.delegate = delegate
-browser1.delegate = delegate
+let browserDelegate = MyBrowserDelegate()
+browser0.delegate = browserDelegate
+browser1.delegate = browserDelegate
 
-withExtendedLifetime((browser0, browser1, delegate)) {
+let ns = mDNS.NetService(domain: "local", type: "_airplay._tcp", name: "MacBook._airplay._tcp.local", port: 8000)
+precondition(ns.setTXTRecord([
+    "pv": "1.0", // state
+    "id": "11:22:33:44:55:66:77:88", // identifier
+    "c#": "1", // version
+    "s#": "1", // state
+    "sf": "1", // discoverable
+    "ff": "0", // mfi compliant
+    "md": "Bridge", // name
+    "ci": "1" // category identifier
+]))
+ns.publish()
+
+withExtendedLifetime((browser0, browser1, browserDelegate, ns)) {
     RunLoop.main.run()
 }
