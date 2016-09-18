@@ -130,7 +130,6 @@ extension Message {
     }
 
     public init(unpack bytes: Data) {
-        bytes.dump()
         let flags = UInt16(bytes: bytes[2..<4])
 
         header = Header(id: UInt16(bytes: bytes[0..<2]),

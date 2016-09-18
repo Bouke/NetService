@@ -7,11 +7,17 @@ public class NetService {
 
     var client: UDPMulticastClient?
 
+    // MARK: Creating Network Services
+
     public init(domain: String, type: String, name: String) {
         self.domain = domain
         self.type = type
         self.name = name
     }
+
+    // MARK: Configuring Network Services
+
+    public internal(set) var addresses: [sockaddr_storage]?
 
     // MARK: Using Network Services
 
@@ -22,17 +28,24 @@ public class NetService {
         }
     }
 
+    func resolve(withTimeout timeout: TimeInterval) {
+
+    }
+
     var port: Int = -1
 
     func stop() {
 
     }
 
+    // MARK: Obtaining the DNS Hostname
+
+    var hostName: String?
 }
 
 extension NetService: CustomDebugStringConvertible {
     public var debugDescription: String {
-        return "NetService(domain: \(domain), type: \(type), name: \(name))"
+        return "NetService(domain: \(domain), type: \(type), name: \(name), port: \(port), hostName: \(hostName), addresses: \(addresses))"
     }
 }
 

@@ -1,25 +1,15 @@
 import Foundation
 
+// TODO: track TTL of records
 public class NetServiceBrowser {
     internal var client: UDPMulticastClient
 
-    var services = [String: NetService]()
-    var pointerRecords = Set<PointerRecord>()
-
-//    var reaper: Timer?
-    var reaper: DispatchSourceTimer
+    var services = [String]()
 
     // MARK: Creating Network Service Browsers
 
     public init() {
         client = try! UDPMulticastClient()
-
-        // TODO: move this to a Timer (which has different API on SwiftFoundation)
-        reaper = DispatchSource.makeTimerSource()
-        reaper.scheduleRepeating(deadline: DispatchTime.now(), interval: 5)
-        reaper.setEventHandler(handler: reap)
-        reaper.resume()
-
         schedule(in: .current, forMode: .defaultRunLoopMode)
     }
 
@@ -29,73 +19,66 @@ public class NetServiceBrowser {
 
     // MARK: Using Network Service Browsers
 
-    public func searchForServices(ofType: String, inDomain: String) {
-        let suffix = "\(ofType).\(inDomain)"
+    public func searchForServices(ofType type: String, inDomain domain: String) {
+        let suffix = "\(type).\(domain)"
+
+        let query = Message(header: Header(response: false), questions: [Question(name: suffix, type: .pointer)])
+        client.multicast(data: Data(try! query.pack()))
 
         client.received = { (address, data, socket) in
             let message = Message(unpack: data)
             guard message.header.response else { return }
 
-            var seenPointerRecords = Set<PointerRecord>()
+            let newPointers = message.answers
+                .flatMap { $0 as? PointerRecord }
+                .filter { !self.services.contains($0.destination) }
 
-            for record in message.answers {
-                if let record = record as? PointerRecord, record.name.hasSuffix(suffix) {
-                    seenPointerRecords.insert(record)
+            for pointer in newPointers {
+                let service = NetService(domain: domain, type: type, name: pointer.destination)
+                guard let serviceRecord = message.additional.flatMap({ $0 as? ServiceRecord }).first(where: { $0.name == pointer.destination }) else {
+                    continue
                 }
-            }
 
-            let newPointerRecords = seenPointerRecords.subtracting(self.pointerRecords)
-            for record in newPointerRecords {
-                let service = NetService(domain: inDomain, type: ofType, name: record.destination)
-                self.services[record.destination] = service
+                service.port = Int(serviceRecord.port)
+                service.hostName = serviceRecord.server
+
+                service.addresses = message.additional
+                    .flatMap { $0 as? HostRecord<IPv4> }
+                    .filter { $0.name == serviceRecord.server }
+                    .map { hostRecord in
+                        sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in) in
+                            sin.sin_family = sa_family_t(AF_INET)
+                            sin.sin_addr = hostRecord.ip.address
+                            sin.sin_port = serviceRecord.port
+                        }.1
+                    }
+                service.addresses! += message.additional
+                    .flatMap { $0 as? HostRecord<IPv6> }
+                    .filter { $0.name == serviceRecord.server }
+                    .map { hostRecord in
+                    sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in6) in
+                        sin.sin6_family = sa_family_t(AF_INET6)
+                        sin.sin6_addr = hostRecord.ip.address
+                        sin.sin6_port = serviceRecord.port
+                    }.1
+                }
+
+                self.services.append(pointer.destination)
                 self.delegate?.netServiceBrowser(self, didFind: service, moreComing: false)
             }
-
-            self.pointerRecords = seenPointerRecords.union(self.pointerRecords) // overwrite ttl
         }
-
-        let query = Message(header: Header(id: 0, response: false, operationCode: .query, authoritativeAnswer: true, truncation: false, recursionDesired: false, recursionAvailable: false, returnCode: .NOERROR), questions: [Question(name: suffix, type: .pointer, internetClass: 1)], answers: [], authorities: [], additional: [])
-
-        Data(try! query.pack()).dump()
-        client.multicast(data: Data(try! query.pack()))
-    }
-
-    func reap() {
-        // TODO: set expiry time on records instead of ttl?
-        for var record in pointerRecords {
-            if record.ttl > 5 {
-                record.ttl -= 5
-                pointerRecords.update(with: record)
-            } else {
-                if let service = services[record.destination] {
-                    delegate?.netServiceBrowser(self, didRemove: service, moreComing: false)
-                    services[record.destination] = nil
-                }
-                pointerRecords.remove(record)
-            }
-        }
-        print(pointerRecords)
-    }
-
-    public func stop() {
-        delegate?.netServiceBrowserDidStopSearch(self)
     }
 
     // MARK: Managing Run Loops
 
     public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         client.schedule(in: aRunLoop, forMode: mode)
-
-//        reaper = Timer(timeInterval: 5, target: self, selector: #selector("reap"), userInfo: nil, repeats: true)
-//        aRunLoop.add(reaper!, forMode: mode)
     }
 
     public func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         client.remove(from: aRunLoop, forMode: mode)
-//        reaper?.invalidate()
     }
 }
-
 
 public protocol NetServiceBrowserDelegate {
     func netServiceBrowser(_ browser: NetServiceBrowser,

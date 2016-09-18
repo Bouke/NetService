@@ -8,7 +8,7 @@ public struct Message {
     public let authorities: [ResourceRecord]
     public let additional: [ResourceRecord]
 
-    public init(header: Header, questions: [Question], answers: [ResourceRecord], authorities: [ResourceRecord], additional: [ResourceRecord]) {
+    public init(header: Header, questions: [Question] = [], answers: [ResourceRecord] = [], authorities: [ResourceRecord] = [], additional: [ResourceRecord] = []) {
         self.header = header
         self.questions = questions
         self.answers = answers
@@ -28,7 +28,7 @@ public struct Header {
     public let recursionAvailable: Bool
     public let returnCode: ReturnCode
 
-    public init(id: UInt16, response: Bool, operationCode: OperationCode, authoritativeAnswer: Bool, truncation: Bool, recursionDesired: Bool, recursionAvailable: Bool, returnCode: ReturnCode) {
+    public init(id: UInt16 = 0, response: Bool, operationCode: OperationCode = .query, authoritativeAnswer: Bool = true, truncation: Bool = false, recursionDesired: Bool = false, recursionAvailable: Bool = false, returnCode: ReturnCode = .NOERROR) {
         self.id = id
         self.response = response
         self.operationCode = operationCode
@@ -75,7 +75,7 @@ public struct Question {
     public let unique: Bool
     public let internetClass: UInt16
 
-    init(name: String, type: ResourceRecordType, unique: Bool = false, internetClass: UInt16) {
+    init(name: String, type: ResourceRecordType, unique: Bool = false, internetClass: UInt16 = 1) {
         self.name = name
         self.type = type
         self.unique = unique
@@ -145,12 +145,24 @@ public struct HostRecord<IPType: IP> {
     public var ttl: UInt32
     public let ip: IPType
 
-    public init(name: String, unique: Bool, internetClass: UInt16, ttl: UInt32, ip: IPType) {
+    public init(name: String, unique: Bool = false, internetClass: UInt16 = 1, ttl: UInt32, ip: IPType) {
         self.name = name
         self.unique = unique
         self.internetClass = internetClass
         self.ttl = ttl
         self.ip = ip
+    }
+}
+
+
+extension HostRecord: Hashable {
+    public var hashValue: Int {
+        return name.hashValue
+    }
+
+    public static func ==<IPType: IP> (lhs: HostRecord<IPType>, rhs: HostRecord<IPType>) -> Bool {
+        return lhs.name == rhs.name
+        // TODO: check equality of IP addresses
     }
 }
 
@@ -165,7 +177,7 @@ public struct ServiceRecord {
     public let port: UInt16
     public let server: String
 
-    public init(name: String, unique: Bool, internetClass: UInt16, ttl: UInt32, priority: UInt16, weight: UInt16, port: UInt16, server: String) {
+    public init(name: String, unique: Bool = false, internetClass: UInt16 = 1, ttl: UInt32, priority: UInt16 = 0, weight: UInt16 = 0, port: UInt16, server: String) {
         self.name = name
         self.unique = unique
         self.internetClass = internetClass
@@ -197,7 +209,7 @@ public struct TextRecord {
     var attributes: [String: String]
     var values: [String]
 
-    public init(name: String, unique: Bool, internetClass: UInt16, ttl: UInt32, attributes: [String: String]) {
+    public init(name: String, unique: Bool = false, internetClass: UInt16 = 1, ttl: UInt32, attributes: [String: String]) {
         self.name = name
         self.unique = unique
         self.internetClass = internetClass
@@ -215,7 +227,7 @@ public struct PointerRecord {
     public var ttl: UInt32
     public let destination: String
 
-    public init(name: String, unique: Bool, internetClass: UInt16, ttl: UInt32, destination: String) {
+    public init(name: String, unique: Bool = false, internetClass: UInt16 = 1, ttl: UInt32, destination: String) {
         self.name = name
         self.unique = unique
         self.internetClass = internetClass
