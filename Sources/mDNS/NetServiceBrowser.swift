@@ -1,16 +1,21 @@
 import Foundation
 
 // TODO: track TTL of records
-public class NetServiceBrowser {
-    internal var client: UDPMulticastClient
-
+public class NetServiceBrowser: Listener {
+    var client: Client
     var services = [String]()
 
     // MARK: Creating Network Service Browsers
 
     public init() {
-        client = try! UDPMulticastClient()
-        schedule(in: .current, forMode: .defaultRunLoopMode)
+        client = try! Client.shared()
+        client.listeners.append(self)
+    }
+
+    deinit {
+        if let index = client.listeners.index(where: { $0 === self }) {
+            client.listeners.remove(at: index)
+        }
     }
 
     // MARK: Configuring Network Service Browsers
@@ -19,64 +24,57 @@ public class NetServiceBrowser {
 
     // MARK: Using Network Service Browsers
 
+    var currentSearch: (type: String, domain: String)?
+
     public func searchForServices(ofType type: String, inDomain domain: String) {
-        let suffix = "\(type).\(domain)"
+        currentSearch = (type, domain)
+        let query = Message(header: Header(response: false), questions: [Question(name: "\(type).\(domain)", type: .pointer)])
+        client.multicast(message: query)
+    }
 
-        let query = Message(header: Header(response: false), questions: [Question(name: suffix, type: .pointer)])
-        client.multicast(data: Data(try! query.pack()))
+    func received(message: Message) {
+        guard let (type, domain) = currentSearch else {
+            return
+        }
 
-        client.received = { (address, data, socket) in
-            let message = Message(unpack: data)
-            guard message.header.response else { return }
+        let newPointers = message.answers
+            .flatMap { $0 as? PointerRecord }
+            .filter { !self.services.contains($0.destination) }
+            .filter { $0.name == "\(type).\(domain)" }
 
-            let newPointers = message.answers
-                .flatMap { $0 as? PointerRecord }
-                .filter { !self.services.contains($0.destination) }
+        for pointer in newPointers {
+            let service = NetService(domain: domain, type: type, name: pointer.destination)
+            guard let serviceRecord = message.additional.flatMap({ $0 as? ServiceRecord }).first(where: { $0.name == pointer.destination }) else {
+                continue
+            }
 
-            for pointer in newPointers {
-                let service = NetService(domain: domain, type: type, name: pointer.destination)
-                guard let serviceRecord = message.additional.flatMap({ $0 as? ServiceRecord }).first(where: { $0.name == pointer.destination }) else {
-                    continue
-                }
+            service.port = Int(serviceRecord.port)
+            service.hostName = serviceRecord.server
 
-                service.port = Int(serviceRecord.port)
-                service.hostName = serviceRecord.server
-
-                service.addresses = message.additional
-                    .flatMap { $0 as? HostRecord<IPv4> }
-                    .filter { $0.name == serviceRecord.server }
-                    .map { hostRecord in
-                        sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in) in
-                            sin.sin_family = sa_family_t(AF_INET)
-                            sin.sin_addr = hostRecord.ip.address
-                            sin.sin_port = serviceRecord.port
+            service.addresses = message.additional
+                .flatMap { $0 as? HostRecord<IPv4> }
+                .filter { $0.name == serviceRecord.server }
+                .map { hostRecord in
+                    sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in) in
+                        sin.sin_family = sa_family_t(AF_INET)
+                        sin.sin_addr = hostRecord.ip.address
+                        sin.sin_port = serviceRecord.port
                         }.1
-                    }
-                service.addresses! += message.additional
-                    .flatMap { $0 as? HostRecord<IPv6> }
-                    .filter { $0.name == serviceRecord.server }
-                    .map { hostRecord in
+            }
+            service.addresses! += message.additional
+                .flatMap { $0 as? HostRecord<IPv6> }
+                .filter { $0.name == serviceRecord.server }
+                .map { hostRecord in
                     sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in6) in
                         sin.sin6_family = sa_family_t(AF_INET6)
                         sin.sin6_addr = hostRecord.ip.address
                         sin.sin6_port = serviceRecord.port
-                    }.1
-                }
-
-                self.services.append(pointer.destination)
-                self.delegate?.netServiceBrowser(self, didFind: service, moreComing: false)
+                        }.1
             }
+
+            self.services.append(pointer.destination)
+            self.delegate?.netServiceBrowser(self, didFind: service, moreComing: false)
         }
-    }
-
-    // MARK: Managing Run Loops
-
-    public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoopMode) {
-        client.schedule(in: aRunLoop, forMode: mode)
-    }
-
-    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
-        client.remove(from: aRunLoop, forMode: mode)
     }
 }
 

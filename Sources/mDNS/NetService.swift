@@ -5,8 +5,6 @@ public class NetService {
     var type: String
     var name: String
 
-    var client: UDPMulticastClient?
-
     // MARK: Creating Network Services
 
     public init(domain: String, type: String, name: String) {
@@ -22,10 +20,10 @@ public class NetService {
     // MARK: Using Network Services
 
     func publish() {
-        client = try! UDPMulticastClient()
-        client!.received = { (address, data, socket) in
-            
-        }
+//        client = try! UDPMulticastClient()
+//        client!.received = { (address, data, socket) in
+//            
+//        }
     }
 
     func resolve(withTimeout timeout: TimeInterval) {

@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-public class UDPMulticastClient {
+public class UDPChannel {
     var received: ((_ address: SockAddr, _ data: Data, _ socket: CFSocket) -> ())?
 
     var socket4: CFSocket!
@@ -52,7 +52,7 @@ public class UDPMulticastClient {
         socket4 = CFSocketCreateWithNative(kCFAllocatorDefault, fd4, CFSocketCallBackType.dataCallBack.rawValue, { (socket, callbackType, address, data, info) in
             let address = UnsafeRawPointer(CFDataGetBytePtr(address!)!).bindMemory(to: sockaddr_in.self, capacity: 1).pointee
             let data = (Unmanaged<CFData>.fromOpaque(data!).takeUnretainedValue() as Data)
-            let _self = Unmanaged<UDPMulticastClient>.fromOpaque(info!).takeUnretainedValue()
+            let _self = Unmanaged<UDPChannel>.fromOpaque(info!).takeUnretainedValue()
             _self.received?(address, data, socket!)
         }, &context)
 
@@ -87,7 +87,7 @@ public class UDPMulticastClient {
         socket6 = CFSocketCreateWithNative(kCFAllocatorDefault, fd6, CFSocketCallBackType.dataCallBack.rawValue, { (socket, callbackType, address, data, info) in
             let address = UnsafeRawPointer(CFDataGetBytePtr(address!)!).bindMemory(to: sockaddr_in6.self, capacity: 1).pointee
             let data = (Unmanaged<CFData>.fromOpaque(data!).takeUnretainedValue() as Data)
-            let _self = Unmanaged<UDPMulticastClient>.fromOpaque(info!).takeUnretainedValue()
+            let _self = Unmanaged<UDPChannel>.fromOpaque(info!).takeUnretainedValue()
             _self.received?(address, data, socket!)
         }, nil)
 
@@ -139,6 +139,7 @@ extension SockAddr {
     }
 }
 
-extension sockaddr_storage: SockAddr, CustomDebugStringConvertible { }
+extension sockaddr_storage: SockAddr, CustomDebugStringConvertible {}
+
 extension sockaddr_in: SockAddr, CustomDebugStringConvertible { }
 extension sockaddr_in6: SockAddr, CustomDebugStringConvertible { }

@@ -33,11 +33,16 @@ class MyDelegate: mDNS.NetServiceBrowserDelegate {
     }
 }
 
-let browser = mDNS.NetServiceBrowser()
-browser.searchForServices(ofType: "_ssh._tcp", inDomain: "local")
+let browser0 = mDNS.NetServiceBrowser()
+browser0.searchForServices(ofType: "_airplay._tcp", inDomain: "local")
+
+let browser1 = mDNS.NetServiceBrowser()
+browser1.searchForServices(ofType: "_adisk._tcp", inDomain: "local")
 
 let delegate = MyDelegate()
-browser.delegate = delegate
-withExtendedLifetime((browser, delegate)) {
+browser0.delegate = delegate
+browser1.delegate = delegate
+
+withExtendedLifetime((browser0, browser1, delegate)) {
     RunLoop.main.run()
 }
