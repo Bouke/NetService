@@ -1,4 +1,6 @@
 import Foundation
+import DNS
+
 
 class Client {
     private static var _shared: Client?

@@ -32,7 +32,7 @@ public func createIP<C: Collection>(networkBytes bytes: C) -> IP? where C.Iterat
 
 public struct IPv4: IP {
     /// IPv4 address in network-byte-order
-    let address: in_addr
+    public let address: in_addr
 
     public init(address: in_addr) {
         self.address = address
@@ -93,7 +93,7 @@ extension IPv4: ExpressibleByIntegerLiteral {
 
 
 public struct IPv6: IP {
-    let address: in6_addr
+    public let address: in6_addr
 
     public init(address: in6_addr) {
         self.address = address

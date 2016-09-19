@@ -1,5 +1,7 @@
 import Darwin
 import Foundation
+import DNS
+
 
 public class UDPChannel {
     var received: ((_ address: SockAddr, _ data: Data, _ socket: CFSocket) -> ())?
@@ -89,7 +91,7 @@ public class UDPChannel {
             let data = (Unmanaged<CFData>.fromOpaque(data!).takeUnretainedValue() as Data)
             let _self = Unmanaged<UDPChannel>.fromOpaque(info!).takeUnretainedValue()
             _self.received?(address, data, socket!)
-        }, nil)
+        }, &context)
 
         runLoopSource6 = CFSocketCreateRunLoopSource(nil, socket6, 0)
     }

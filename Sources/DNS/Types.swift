@@ -75,7 +75,7 @@ public struct Question {
     public var unique: Bool
     public var internetClass: UInt16
 
-    init(name: String, type: ResourceRecordType, unique: Bool = false, internetClass: UInt16 = 1) {
+    public init(name: String, type: ResourceRecordType, unique: Bool = false, internetClass: UInt16 = 1) {
         self.name = name
         self.type = type
         self.unique = unique

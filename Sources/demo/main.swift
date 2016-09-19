@@ -1,5 +1,8 @@
-import Foundation
-import mDNS
+import class Foundation.NSNumber
+import class Foundation.InputStream
+import class Foundation.OutputStream
+import class Foundation.RunLoop
+import NetService
 
 
 // server
@@ -19,40 +22,42 @@ import mDNS
 //
 //let msg = Message(header: Header(id: 0, response: true, operationCode: .query, authoritativeAnswer: true, truncation: false, recursionDesired: false, recursionAvailable: false, returnCode: .NOERROR), questions: [], answers: [hapPointer], authorities: [], additional: [hapService, hapHost, hapInfo])
 
-class MyBrowserDelegate: mDNS.NetServiceBrowserDelegate {
-    public func netServiceBrowser(_ browser: mDNS.NetServiceBrowser, didFind service: mDNS.NetService, moreComing: Bool) {
+class MyBrowserDelegate: NetServiceBrowserDelegate {
+    public func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         print("Did find: \(service)")
     }
 
-    public func netServiceBrowser(_ browser: mDNS.NetServiceBrowser, didRemove service: mDNS.NetService, moreComing: Bool) {
+    public func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
         print("Did remove: \(service)")
     }
 
-    public func netServiceBrowserDidStopSearch(_ browser: mDNS.NetServiceBrowser) {
+    public func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) {
 
     }
 }
 
-class MyServiceDelegate: mDNS.NetServiceDelegate {
-    func netServiceWillPublish(_ sender: mDNS.NetService) {
+var toggle = true
+
+class MyServiceDelegate: NetServiceDelegate {
+    func netServiceWillPublish(_ sender: NetService) {
         print("\(sender) will publish")
     }
 
-    func netServiceDidPublish(_ sender: mDNS.NetService) {
+    func netServiceDidPublish(_ sender: NetService) {
         print("\(sender) did publish")
-        sender.stop()
     }
 
-    func netService(_ sender: mDNS.NetService, didNotPublish errorDict: [String : NSNumber]) {
+    func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
         print("\(sender) did not publish: \(errorDict)")
     }
 
-    func netServiceDidStop(_ sender: mDNS.NetService) {
+    func netServiceDidStop(_ sender: NetService) {
         print("\(sender) did stop")
     }
 
-    func netService(_ sender: mDNS.NetService, didAcceptConnectionWith inputStream: InputStream, outputStream: OutputStream) {
+    func netService(_ sender: NetService, didAcceptConnectionWith inputStream: InputStream, outputStream: OutputStream) {
         print(sender, inputStream, outputStream)
+        precondition(false)
         inputStream.open()
         inputStream.close()
         outputStream.open()
@@ -60,17 +65,17 @@ class MyServiceDelegate: mDNS.NetServiceDelegate {
     }
 }
 
-let browser0 = mDNS.NetServiceBrowser()
+let browser0 = NetServiceBrowser()
 browser0.searchForServices(ofType: "_airplay._tcp.", inDomain: "local.")
 
-let browser1 = mDNS.NetServiceBrowser()
+let browser1 = NetServiceBrowser()
 //browser1.searchForServices(ofType: "_airport._tcp.", inDomain: "local.")
 
 let browserDelegate = MyBrowserDelegate()
 browser0.delegate = browserDelegate
 browser1.delegate = browserDelegate
 
-let ns = mDNS.NetService(domain: "local.", type: "_airplay._tcp.", name: "Zithoek", port: 8000)
+let ns = NetService(domain: "local.", type: "_hap._tcp.", name: "Zithoek", port: 8000)
 precondition(ns.setTXTRecord([
     "pv": "1.0", // state
     "id": "11:22:33:44:55:66:77:99", // identifier

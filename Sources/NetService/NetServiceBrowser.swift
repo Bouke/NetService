@@ -1,4 +1,5 @@
 import Foundation
+import DNS
 
 // TODO: track TTL of records
 public class NetServiceBrowser: Listener {

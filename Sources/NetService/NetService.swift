@@ -1,5 +1,7 @@
 import Foundation
 import Cifaddrs
+import DNS
+
 
 let duplicateNameCheckTimeInterval = TimeInterval(2)
 
@@ -90,13 +92,24 @@ public class NetService: Responder, Listener {
     var hostRecords: [ResourceRecord]?
     var textRecord: TextRecord?
 
-    enum PublishState {
+    enum PublishState: Equatable {
+        case stopped
         case lookingForDuplicates(Int, Timer)
         case published
+
+        static func == (lhs: PublishState, rhs: PublishState) -> Bool {
+            switch (lhs, rhs) {
+            case (.stopped, .stopped), (.published, .published): return true
+            case (.lookingForDuplicates(_), .lookingForDuplicates(_)): return true
+            default: return false
+            }
+        }
     }
-    var publishState: PublishState?
+    var publishState: PublishState = .stopped
 
     public func publish(options: Options = []) {
+        precondition(publishState == .stopped)
+
         client = try! Client.shared()
 
         // TODO: support ipv6
@@ -163,7 +176,6 @@ public class NetService: Responder, Listener {
         addresses = getifaddrs()
             .filter { Int32($0.pointee.ifa_flags) & IFF_LOOPBACK == 0 }
             .flatMap { sockaddr_storage(fromSockAddr: $0.pointee.ifa_addr.pointee) }
-        print(addresses)
         hostRecords = addresses!.flatMap { (sa) -> ResourceRecord? in
             switch sa.ss_family {
             case sa_family_t(AF_INET):
@@ -201,9 +213,9 @@ public class NetService: Responder, Listener {
 
         // allow reuse
         var yes: UInt32 = 1
-        try! posix(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, socklen_t(MemoryLayout<UInt32>.size)))
+        try posix(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, socklen_t(MemoryLayout<UInt32>.size)))
 
-        try! address.withSockAddr {
+        try address.withSockAddr {
             try posix(bind(fd, $0, $1))
             try posix(listen(fd, 4))
         }
@@ -250,7 +262,7 @@ public class NetService: Responder, Listener {
     }
 
     func received(message: Message) {
-        guard case .lookingForDuplicates(let (number, timer))? = publishState else { return }
+        guard case .lookingForDuplicates(let (number, timer)) = publishState else { return }
 
         if message.answers.flatMap({ $0 as? ServiceRecord }).contains(where: { $0.name == fqdn }) {
             timer.invalidate()
@@ -272,9 +284,20 @@ public class NetService: Responder, Listener {
     public internal(set) var port: Int = -1
 
     public func stop() {
+        precondition(publishState == .published)
+
+        CFSocketInvalidate(socket!.0)
+        CFSocketInvalidate(socket6!.0)
+
         pointerRecord!.ttl = 0
         serviceRecord!.ttl = 0
         broadcastService()
+
+        if let index = client!.responders.index(where: {$0 === self }) {
+            client!.responders.remove(at: index)
+        }
+
+        publishState = .stopped
         delegate?.netServiceDidStop(self)
     }
 
