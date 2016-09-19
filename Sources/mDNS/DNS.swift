@@ -180,7 +180,11 @@ extension HostRecord: ResourceRecord {
     public func pack() throws -> Data {
         switch ip {
         case let ip as IPv4:
-            return try packRecordCommonFields((name, ResourceRecordType.host.rawValue, unique, internetClass, ttl)) + UInt16(4).bytes + ip.bytes
+            let data = ip.bytes
+            return try packRecordCommonFields((name, ResourceRecordType.host.rawValue, unique, internetClass, ttl)) + UInt16(data.count).bytes + data
+        case let ip as IPv6:
+            let data = ip.bytes
+            return try packRecordCommonFields((name, ResourceRecordType.host6.rawValue, unique, internetClass, ttl)) + UInt16(data.count).bytes + data
         default:
             abort()
         }

@@ -159,18 +159,26 @@ public class NetService: Responder, Listener {
         precondition(port > 0)
         serviceRecord = ServiceRecord(name: fqdn, ttl: 120, port: UInt16(port), server: hostName!)
 
-        hostRecords = getifaddrs()
+        // TODO: update host records on IP address changes
+        addresses = getifaddrs()
             .filter { Int32($0.pointee.ifa_flags) & IFF_LOOPBACK == 0 }
             .flatMap { sockaddr_storage(fromSockAddr: $0.pointee.ifa_addr.pointee) }
-            .flatMap { (sa) -> ResourceRecord? in
-                switch sa.ss_family {
-                case sa_family_t(AF_INET):
-                    return sa.withSockAddrType { (sin: inout sockaddr_in) in
-                        HostRecord<IPv4>(name: hostName!, ttl: 120, ip: IPv4(address: sin.sin_addr))
-                    }
-                default: return nil
+        print(addresses)
+        hostRecords = addresses!.flatMap { (sa) -> ResourceRecord? in
+            switch sa.ss_family {
+            case sa_family_t(AF_INET):
+                return sa.withSockAddrType { (sin: inout sockaddr_in) in
+                    HostRecord<IPv4>(name: hostName!, ttl: 120, ip: IPv4(address: sin.sin_addr))
                 }
+            case sa_family_t(AF_INET6):
+                return sa.withSockAddrType { (sin: inout sockaddr_in6) in
+                    HostRecord<IPv6>(name: hostName!, ttl: 120, ip: IPv6(address: sin.sin6_addr))
+                }
+            default: return nil
+            }
         }
+
+        textRecord?.name = fqdn
 
         // prepare for questions
         client!.responders.append(self)

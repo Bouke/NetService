@@ -2,11 +2,11 @@ import Foundation
 
 
 public struct Message {
-    public let header: Header
-    public let questions: [Question]
-    public let answers: [ResourceRecord]
-    public let authorities: [ResourceRecord]
-    public let additional: [ResourceRecord]
+    public var header: Header
+    public var questions: [Question]
+    public var answers: [ResourceRecord]
+    public var authorities: [ResourceRecord]
+    public var additional: [ResourceRecord]
 
     public init(header: Header, questions: [Question] = [], answers: [ResourceRecord] = [], authorities: [ResourceRecord] = [], additional: [ResourceRecord] = []) {
         self.header = header
@@ -19,14 +19,14 @@ public struct Message {
 
 
 public struct Header {
-    public let id: UInt16
-    public let response: Bool
-    public let operationCode: OperationCode
-    public let authoritativeAnswer: Bool
-    public let truncation: Bool
-    public let recursionDesired: Bool
-    public let recursionAvailable: Bool
-    public let returnCode: ReturnCode
+    public var id: UInt16
+    public var response: Bool
+    public var operationCode: OperationCode
+    public var authoritativeAnswer: Bool
+    public var truncation: Bool
+    public var recursionDesired: Bool
+    public var recursionAvailable: Bool
+    public var returnCode: ReturnCode
 
     public init(id: UInt16 = 0, response: Bool, operationCode: OperationCode = .query, authoritativeAnswer: Bool = true, truncation: Bool = false, recursionDesired: Bool = false, recursionAvailable: Bool = false, returnCode: ReturnCode = .NOERROR) {
         self.id = id
@@ -70,10 +70,10 @@ public enum ReturnCode: UInt8 {
 
 
 public struct Question {
-    public let name: String
-    public let type: ResourceRecordType
-    public let unique: Bool
-    public let internetClass: UInt16
+    public var name: String
+    public var type: ResourceRecordType
+    public var unique: Bool
+    public var internetClass: UInt16
 
     init(name: String, type: ResourceRecordType, unique: Bool = false, internetClass: UInt16 = 1) {
         self.name = name
@@ -120,10 +120,10 @@ public protocol ResourceRecord {
 
 
 public struct Record {
-    public let name: String
-    public let type: UInt16
-    public let internetClass: UInt16
-    public let unique: Bool
+    public var name: String
+    public var type: UInt16
+    public var internetClass: UInt16
+    public var unique: Bool
     public var ttl: UInt32
     var data: Data
 
@@ -139,11 +139,11 @@ public struct Record {
 
 
 public struct HostRecord<IPType: IP> {
-    public let name: String
-    public let unique: Bool
-    public let internetClass: UInt16
+    public var name: String
+    public var unique: Bool
+    public var internetClass: UInt16
     public var ttl: UInt32
-    public let ip: IPType
+    public var ip: IPType
 
     public init(name: String, unique: Bool = false, internetClass: UInt16 = 1, ttl: UInt32, ip: IPType) {
         self.name = name
@@ -168,14 +168,14 @@ extension HostRecord: Hashable {
 
 
 public struct ServiceRecord {
-    public let name: String
-    public let unique: Bool
-    public let internetClass: UInt16
+    public var name: String
+    public var unique: Bool
+    public var internetClass: UInt16
     public var ttl: UInt32
-    public let priority: UInt16
-    public let weight: UInt16
-    public let port: UInt16
-    public let server: String
+    public var priority: UInt16
+    public var weight: UInt16
+    public var port: UInt16
+    public var server: String
 
     public init(name: String, unique: Bool = false, internetClass: UInt16 = 1, ttl: UInt32, priority: UInt16 = 0, weight: UInt16 = 0, port: UInt16, server: String) {
         self.name = name
@@ -202,9 +202,9 @@ extension ServiceRecord: Hashable {
 
 
 public struct TextRecord {
-    public let name: String
-    public let unique: Bool
-    public let internetClass: UInt16
+    public var name: String
+    public var unique: Bool
+    public var internetClass: UInt16
     public var ttl: UInt32
     var attributes: [String: String]
     var values: [String]
@@ -221,11 +221,11 @@ public struct TextRecord {
 
 
 public struct PointerRecord {
-    public let name: String
-    public let unique: Bool
-    public let internetClass: UInt16
+    public var name: String
+    public var unique: Bool
+    public var internetClass: UInt16
     public var ttl: UInt32
-    public let destination: String
+    public var destination: String
 
     public init(name: String, unique: Bool = false, internetClass: UInt16 = 1, ttl: UInt32, destination: String) {
         self.name = name
