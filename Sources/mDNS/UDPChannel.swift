@@ -152,10 +152,10 @@ extension SockAddr {
     public var debugDescription: String {
         return withSockAddr { (sa, saLen) in
             var name = Data(count: Int(NI_MAXHOST))
-            name.withUnsafeMutableBytes {
-                try! posix(getnameinfo(sa, saLen, $0, socklen_t(NI_MAXHOST), nil, 0, NI_NUMERICHOST))
+            return name.withUnsafeMutableBytes { (bytes: UnsafeMutablePointer<CChar>) -> String in
+                try! posix(getnameinfo(sa, saLen, bytes, socklen_t(NI_MAXHOST), nil, 0, NI_NUMERICHOST))
+                return String(cString: bytes)
             }
-            return String(data: name, encoding: .ascii)!
         }
     }
 }
