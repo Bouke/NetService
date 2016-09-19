@@ -118,6 +118,16 @@ public class UDPChannel {
 protocol SockAddr { }
 
 extension SockAddr {
+    mutating func withMutableSockAddr<ReturnType>(_ body: (_ sa: UnsafeMutablePointer<sockaddr>, _ saLen: inout socklen_t) throws -> ReturnType) rethrows -> ReturnType {
+        // We need to create a mutable copy of `self` so that we can pass it to `withUnsafePointer(to:_:)`.
+        var saLen = socklen_t(MemoryLayout<sockaddr>.size)
+        return try withUnsafeMutablePointer(to: &self) {
+            try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                try body($0, &saLen)
+            }
+        }
+    }
+
     func withSockAddr<ReturnType>(_ body: (_ sa: UnsafePointer<sockaddr>, _ saLen: socklen_t) throws -> ReturnType) rethrows -> ReturnType {
         // We need to create a mutable copy of `self` so that we can pass it to `withUnsafePointer(to:_:)`.
         var ss = self
@@ -168,6 +178,21 @@ extension sockaddr_storage: SockAddr, CustomDebugStringConvertible {
                 }.1
             }
         default: return nil
+        }
+    }
+
+    var port: UInt16? {
+        switch ss_family {
+        case sa_family_t(AF_INET):
+            return withSockAddrType { (src: inout sockaddr_in) in
+                src.sin_port.bigEndian
+            }
+        case sa_family_t(AF_INET6):
+            return withSockAddrType { (src: inout sockaddr_in6) in
+                src.sin6_port.bigEndian
+            }
+        default:
+            return nil
         }
     }
 }

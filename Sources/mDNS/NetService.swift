@@ -1,30 +1,48 @@
 import Foundation
 import Cifaddrs
 
+let duplicateNameCheckTimeInterval = TimeInterval(2)
+
 // TODO: check name availability before claiming the service's name
-public class NetService: Responder {
+public class NetService: Responder, Listener {
     public var domain: String
     public var type: String
     public var name: String
 
-    // MARK: Creating Network Services
+    private var fqdn: String
 
-    public init(domain: String, type: String, name: String) {
-        self.domain = domain
-        self.type = type
-        self.name = name
+    public struct Options: OptionSet {
+        public let rawValue: Int
+        public init(rawValue:Int) {
+            self.rawValue = rawValue
+        }
+
+        public static let noAutoRename = Options(rawValue: 1)
+        public static let listenForConnections = Options(rawValue: 2)
     }
 
-    public init(domain: String, type: String, name: String, port: Int) {
+    // MARK: Creating Network Services
+
+    convenience init(domain: String, type: String, name: String) {
+        self.init(domain: domain, type: type, name: name, port: -1)
+    }
+
+    public init(domain: String, type: String, name: String, port: Int32) {
+        assert(domain == "local.", "only local. domain is supported")
+        assert(type.hasSuffix("."), "type label(s) should end with a period")
+
         self.domain = domain
         self.type = type
         self.name = name
-        self.port = port
+        self.port = Int(port)
+        fqdn = "\(name).\(type)\(domain)"
     }
 
     // MARK: Configuring Network Services
 
     public internal(set) var addresses: [sockaddr_storage]?
+
+    public var delegate: NetServiceDelegate?
 
     // NOTE: Differs from Cocoa implementation (uses Data instead)
     public func setTXTRecord(_ recordData: [String: String]?) -> Bool {
@@ -32,11 +50,39 @@ public class NetService: Responder {
             textRecord = nil
             return false
         }
-        textRecord = TextRecord(name: name, ttl: 120, attributes: recordData)
+        textRecord = TextRecord(name: fqdn, ttl: 120, attributes: recordData)
         return true
     }
 
+    // MARK: Managing Run Loops
+
+    var currentRunLoop: RunLoop?
+
+    public func schedule(in aRunLoop: RunLoop,
+                         forMode mode: RunLoopMode) {
+        currentRunLoop = aRunLoop
+        if let source = socket?.1 {
+            CFRunLoopAddSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
+        }
+        if let source = socket6?.1 {
+            CFRunLoopAddSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
+        }
+    }
+
+    public func remove(from aRunLoop: RunLoop,
+                       forMode mode: RunLoopMode) {
+        currentRunLoop = nil
+        if let source = socket?.1 {
+            CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
+        }
+        if let source = socket6?.1 {
+            CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
+        }
+    }
+
     // MARK: Using Network Services
+    var socket: (CFSocket, CFRunLoopSource)?
+    var socket6: (CFSocket, CFRunLoopSource)?
 
     var client: Client?
     var pointerRecord: PointerRecord?
@@ -44,22 +90,76 @@ public class NetService: Responder {
     var hostRecords: [ResourceRecord]?
     var textRecord: TextRecord?
 
-    public func publish() {
-        pointerRecord = PointerRecord(name: "\(type).\(domain)", ttl: 4500, destination: name)
+    enum PublishState {
+        case lookingForDuplicates(Int, Timer)
+        case published
+    }
+    var publishState: PublishState?
 
-        var output = Data(count: 255)
-        hostName = try! output.withUnsafeMutableBytes { (bytes: UnsafeMutablePointer<CChar>) -> String? in
-            try posix(gethostname(bytes, 255))
-            return String(cString: bytes)
+    public func publish(options: Options = []) {
+        client = try! Client.shared()
+
+        // TODO: support ipv6
+        // TODO: auto rename
+        // TODO: support noAutoRename option
+
+        delegate?.netServiceWillPublish(self)
+
+        if !options.contains(.noAutoRename) {
+            // check if name is taken -- allow others a few seconds to respond
+
+            client!.listeners.append(self)
+            client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+            // TODO: remove listener
+
+            let timer = Timer._scheduledTimer(withTimeInterval: duplicateNameCheckTimeInterval, repeats: false, block: {_ in self.publishPhaseTwo()})
+            publishState = .lookingForDuplicates(1, timer)
         }
-        precondition(hostName!.hasSuffix(domain))
-        precondition(port > 0)
-        serviceRecord = ServiceRecord(name: name, ttl: 120, port: UInt16(port), server: hostName!)
 
-        var addrs: UnsafeMutablePointer<ifaddrs>?
-        try! posix(getifaddrs(&addrs))
-        guard let first = addrs else { abort() }
-        hostRecords = sequence(first: first, next: { $0.pointee.ifa_next })
+        if options.contains(.listenForConnections) {
+            precondition(type.hasSuffix("._tcp."), "only listening on TCP is supported")
+
+            // host server
+            var ipv4 = sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in) in
+                sin.sin_family = sa_family_t(AF_INET)
+                sin.sin_addr = in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))
+                sin.sin_port = in_port_t(self.port).bigEndian
+                }.1
+            let socket = try! tcpListener(address: &ipv4)
+            var ipv6 = sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in6) in
+                sin.sin6_family = sa_family_t(AF_INET6)
+                sin.sin6_addr = in6addr_any
+                sin.sin6_port = in_port_t(ipv4.port!).bigEndian
+                }.1
+            let socket6 = try! tcpListener(address: &ipv6)
+
+            port = Int(ipv4.port!)
+
+            self.socket = (socket, CFSocketCreateRunLoopSource(nil, socket, 0)!)
+            self.socket6 = (socket6, CFSocketCreateRunLoopSource(nil, socket6, 0)!)
+
+            if let currentRunLoop = currentRunLoop {
+                CFRunLoopRemoveSource(currentRunLoop.getCFRunLoop(), self.socket!.1, .defaultMode)
+                CFRunLoopRemoveSource(currentRunLoop.getCFRunLoop(), self.socket6!.1, .defaultMode)
+            }
+        }
+    }
+
+    func publishPhaseTwo() {
+        if let index = client!.listeners.index(where: {$0 === self }) {
+            client!.listeners.remove(at: index)
+        }
+
+        hostName = try! gethostname() + "."
+        precondition(hostName!.hasSuffix(domain), "host name \(hostName) should have suffix \(domain)")
+
+        // publish mdns
+        pointerRecord = PointerRecord(name: "\(type)\(domain)", ttl: 4500, destination: fqdn)
+
+        precondition(port > 0)
+        serviceRecord = ServiceRecord(name: fqdn, ttl: 120, port: UInt16(port), server: hostName!)
+
+        hostRecords = getifaddrs()
             .filter { Int32($0.pointee.ifa_flags) & IFF_LOOPBACK == 0 }
             .flatMap { sockaddr_storage(fromSockAddr: $0.pointee.ifa_addr.pointee) }
             .flatMap { (sa) -> ResourceRecord? in
@@ -70,18 +170,47 @@ public class NetService: Responder {
                     }
                 default: return nil
                 }
-            }
+        }
 
         // prepare for questions
-        client = try! Client.shared()
         client!.responders.append(self)
 
         // broadcast availability
-        client?.multicast(message: Message(header: Header(response: false), answers: [pointerRecord!], additional: [serviceRecord!] + hostRecords!))
+        broadcastService()
+        publishState = .published
+        delegate?.netServiceDidPublish(self)
+    }
+
+    func broadcastService() {
+        client!.multicast(message: Message(header: Header(response: true), answers: [pointerRecord!], additional: [serviceRecord!] + hostRecords!))
+    }
+
+    func tcpListener(address: inout sockaddr_storage) throws -> CFSocket {
+        let fd = Darwin.socket(Int32(address.ss_family), SOCK_STREAM, IPPROTO_TCP)
+        guard fd >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        }
+
+        // allow reuse
+        var yes: UInt32 = 1
+        try! posix(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, socklen_t(MemoryLayout<UInt32>.size)))
+
+        try! address.withSockAddr {
+            try posix(bind(fd, $0, $1))
+            try posix(listen(fd, 4))
+        }
+
+        try address.withMutableSockAddr {
+            try posix(getsockname(fd, $0, &$1))
+        }
+
+        var context = CFSocketContext()
+        context.info = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+
+        return CFSocketCreateWithNative(nil, fd, CFSocketCallBackType.acceptCallBack.rawValue, acceptCallBack, &context)!
     }
 
     func respond(toMessage message: Message) -> (answers: [ResourceRecord], authorities: [ResourceRecord], additional: [ResourceRecord])? {
-        print("Questions:", message.questions)
         var answers = [ResourceRecord]()
         var additional = [ResourceRecord]()
 
@@ -91,7 +220,7 @@ public class NetService: Responder {
                 answers.append(pointerRecord!)
                 additional.append(serviceRecord!)
                 additional.append(contentsOf: hostRecords!)
-            case .service where question.name == name:
+            case .service where question.name == serviceRecord?.name:
                 answers.append(serviceRecord!)
                 additional.append(contentsOf: hostRecords!)
             case .host:
@@ -100,7 +229,7 @@ public class NetService: Responder {
             case .host6:
                 // TODO: only return ipv6 addresses
                 answers.append(contentsOf: hostRecords!.filter({ $0.name == question.name }))
-            case .text where question.name == name:
+            case .text where question.name == textRecord?.name:
                 if let textRecord = textRecord {
                     answers.append(textRecord)
                 } else {
@@ -109,9 +238,23 @@ public class NetService: Responder {
             default: break
             }
         }
-
-        print(answers, [], additional)
         return (answers, [], additional)
+    }
+
+    func received(message: Message) {
+        guard case .lookingForDuplicates(let (number, timer))? = publishState else { return }
+
+        if message.answers.flatMap({ $0 as? ServiceRecord }).contains(where: { $0.name == fqdn }) {
+            timer.invalidate()
+
+            fqdn = "\(name) (\(number + 1)).\(type)\(domain)"
+            client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+            let timer = Timer._scheduledTimer(withTimeInterval: duplicateNameCheckTimeInterval, repeats: false, block: {_ in
+                self.name = "\(self.name) (\(number + 1))"
+                self.publishPhaseTwo()
+            })
+            publishState = .lookingForDuplicates(number + 1, timer)
+        }
     }
 
     public func resolve(withTimeout timeout: TimeInterval) {
@@ -121,7 +264,10 @@ public class NetService: Responder {
     public internal(set) var port: Int = -1
 
     public func stop() {
-
+        pointerRecord!.ttl = 0
+        serviceRecord!.ttl = 0
+        broadcastService()
+        delegate?.netServiceDidStop(self)
     }
 
     // MARK: Obtaining the DNS Hostname
@@ -136,7 +282,18 @@ extension NetService: CustomDebugStringConvertible {
 }
 
 
-protocol NetServiceDelegate {
+func acceptCallBack(socket: CFSocket?, callBackType: CFSocketCallBackType, address: CFData?, data: UnsafeRawPointer?, info: UnsafeMutableRawPointer?) {
+    let service = Unmanaged<NetService>.fromOpaque(info!).takeUnretainedValue()
+    let nativeHandle = data!.bindMemory(to: CFSocketNativeHandle.self, capacity: 1).pointee
+    var readStream: Unmanaged<CFReadStream>?
+    var writeStream: Unmanaged<CFWriteStream>?
+    CFStreamCreatePairWithSocket(nil, nativeHandle, &readStream, &writeStream)
+    service.delegate?.netService(service, didAcceptConnectionWith: readStream!.takeUnretainedValue(), outputStream: writeStream!.takeUnretainedValue())
+}
+
+
+
+public protocol NetServiceDelegate {
 
     // MARK: Using Network Services
 

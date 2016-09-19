@@ -11,7 +11,7 @@ func unpackName(_ data: Data, _ position: inout Data.Index) -> String {
         let step = data[position]
         if step & 0xc0 == 0xc0 {
             var pointer = data.index(data.startIndex, offsetBy: Int(UInt16(bytes: data[position..<position+2]) ^ 0xc000))
-            components += unpackName(data, &pointer).components(separatedBy: ".")
+            components += unpackName(data, &pointer).components(separatedBy: ".").filter({ $0 != "" })
             position += 2
             break
         }
@@ -29,16 +29,17 @@ func unpackName(_ data: Data, _ position: inout Data.Index) -> String {
         }
         position = end
     }
-    return components.joined(separator: ".")
+    return components.joined(separator: ".") + "."
 }
 
 
+// TODO: efficient packing (reuse labels with pointers)
 func packName(_ name: String) throws -> Data {
     if name.utf8.reduce(false, { $0 || $1 & 128 == 128 }) {
         throw EncodeError.unicodeEncodingNotSupported
     }
     var bytes: [UInt8] = []
-    for label in name.components(separatedBy: ".") {
+    for label in name.components(separatedBy: ".").filter({ $0 != "" }) {
         let codes = Array(label.utf8)
         bytes += [UInt8(codes.count)] + codes
     }
