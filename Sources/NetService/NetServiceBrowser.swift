@@ -21,7 +21,7 @@ public class NetServiceBrowser: Listener {
 
     // MARK: Configuring Network Service Browsers
 
-    public var delegate: NetServiceBrowserDelegate?
+    public weak var delegate: NetServiceBrowserDelegate?
 
     // MARK: Using Network Service Browsers
 

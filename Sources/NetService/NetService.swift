@@ -44,7 +44,7 @@ public class NetService: Responder, Listener {
 
     public internal(set) var addresses: [sockaddr_storage]?
 
-    public var delegate: NetServiceDelegate?
+    public weak var delegate: NetServiceDelegate?
 
     // NOTE: Differs from Cocoa implementation (uses Data instead)
     public func setTXTRecord(_ recordData: [String: String]?) -> Bool {
@@ -321,7 +321,6 @@ func acceptCallBack(socket: CFSocket?, callBackType: CFSocketCallBackType, addre
     CFStreamCreatePairWithSocket(nil, nativeHandle, &readStream, &writeStream)
     service.delegate?.netService(service, didAcceptConnectionWith: readStream!.takeUnretainedValue(), outputStream: writeStream!.takeUnretainedValue())
 }
-
 
 
 public protocol NetServiceDelegate {
