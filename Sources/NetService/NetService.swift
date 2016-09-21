@@ -225,7 +225,15 @@ public class NetService: Responder, Listener {
             timer.invalidate()
         }
         publishState = .didNotPublish(error)
-        delegate?.netService(self, didNotPublish: [error.localizedDescription: 1])
+        switch error {
+        case let error as NSError:
+            delegate?.netService(self, didNotPublish: [error.description: NSNumber(integerLiteral: error.code)])
+        case let error as POSIXError:
+            delegate?.netService(self, didNotPublish: ["\(error.code)": NSNumber(integerLiteral: error.errorCode)])
+        default:
+            delegate?.netService(self, didNotPublish: [error.localizedDescription: -1])
+        }
+
     }
 
     func broadcastService() {
