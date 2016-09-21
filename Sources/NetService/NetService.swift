@@ -1,3 +1,7 @@
+#if !os(OSX)
+    import CoreFoundation
+#endif
+
 import Foundation
 import Cifaddrs
 import DNS
@@ -63,9 +67,10 @@ public class NetService: Responder, Listener {
     public func schedule(in aRunLoop: RunLoop,
                          forMode mode: RunLoopMode) {
         currentRunLoop = aRunLoop
-        if let source = socket?.1 {
+        if let source = socket4?.1 {
             CFRunLoopAddSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
         }
+
         if let source = socket6?.1 {
             CFRunLoopAddSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
         }
@@ -74,7 +79,7 @@ public class NetService: Responder, Listener {
     public func remove(from aRunLoop: RunLoop,
                        forMode mode: RunLoopMode) {
         currentRunLoop = nil
-        if let source = socket?.1 {
+        if let source = socket4?.1 {
             CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
         }
         if let source = socket6?.1 {
@@ -83,7 +88,7 @@ public class NetService: Responder, Listener {
     }
 
     // MARK: Using Network Services
-    var socket: (CFSocket, CFRunLoopSource)?
+    var socket4: (CFSocket, CFRunLoopSource)?
     var socket6: (CFSocket, CFRunLoopSource)?
 
     var client: Client?
@@ -148,11 +153,11 @@ public class NetService: Responder, Listener {
 
             port = Int(ipv4.port!)
 
-            self.socket = (socket, CFSocketCreateRunLoopSource(nil, socket, 0)!)
+            self.socket4 = (socket, CFSocketCreateRunLoopSource(nil, socket, 0)!)
             self.socket6 = (socket6, CFSocketCreateRunLoopSource(nil, socket6, 0)!)
 
             if let currentRunLoop = currentRunLoop {
-                CFRunLoopRemoveSource(currentRunLoop.getCFRunLoop(), self.socket!.1, .defaultMode)
+                CFRunLoopRemoveSource(currentRunLoop.getCFRunLoop(), self.socket4!.1, .defaultMode)
                 CFRunLoopRemoveSource(currentRunLoop.getCFRunLoop(), self.socket6!.1, .defaultMode)
             }
         }
@@ -174,7 +179,7 @@ public class NetService: Responder, Listener {
 
         // TODO: update host records on IP address changes
         addresses = getifaddrs()
-            .filter { Int32($0.pointee.ifa_flags) & IFF_LOOPBACK == 0 }
+            .filter { Int($0.pointee.ifa_flags) & Int(IFF_LOOPBACK) == 0 }
             .flatMap { sockaddr_storage(fromSockAddr: $0.pointee.ifa_addr.pointee) }
         hostRecords = addresses!.flatMap { (sa) -> ResourceRecord? in
             switch sa.ss_family {
@@ -206,9 +211,17 @@ public class NetService: Responder, Listener {
     }
 
     func tcpListener(address: inout sockaddr_storage) throws -> CFSocket {
-        let fd = Darwin.socket(Int32(address.ss_family), SOCK_STREAM, IPPROTO_TCP)
+        #if os(OSX)
+            let fd = socket(Int32(address.ss_family), SOCK_STREAM, IPPROTO_TCP)
+        #else
+            let fd = socket(Int32(address.ss_family), Int32(SOCK_STREAM.rawValue), Int32(IPPROTO_TCP))
+        #endif
         guard fd >= 0 else {
-            throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+            #if os(OSX)
+                throw POSIXError(POSIXError.Code(rawValue: errno)!)
+            #else
+                throw POSIXError(_nsError: NSError(domain: NSPOSIXErrorDomain, code: Int(errno)))
+            #endif
         }
 
         // allow reuse
@@ -227,7 +240,11 @@ public class NetService: Responder, Listener {
         var context = CFSocketContext()
         context.info = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
-        return CFSocketCreateWithNative(nil, fd, CFSocketCallBackType.acceptCallBack.rawValue, acceptCallBack, &context)!
+        #if os(OSX)
+            return CFSocketCreateWithNative(nil, fd, CFSocketCallBackType.acceptCallBack.rawValue, acceptCallBack, &context)!
+        #else
+            return CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketAcceptCallBack), acceptCallBack, &context)!
+        #endif
     }
 
     func respond(toMessage message: Message) -> (answers: [ResourceRecord], authorities: [ResourceRecord], additional: [ResourceRecord])? {
@@ -286,7 +303,7 @@ public class NetService: Responder, Listener {
     public func stop() {
         precondition(publishState == .published)
 
-        CFSocketInvalidate(socket!.0)
+        CFSocketInvalidate(socket4!.0)
         CFSocketInvalidate(socket6!.0)
 
         pointerRecord!.ttl = 0

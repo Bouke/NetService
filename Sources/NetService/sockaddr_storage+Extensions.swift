@@ -1,4 +1,97 @@
-import Darwin
+import Foundation
+
+#if os(OSX)
+    import Darwin
+#else
+    import Glibc
+#endif
+
+protocol SockAddr { }
+
+extension SockAddr {
+    mutating func withMutableSockAddr<ReturnType>(_ body: (_ sa: UnsafeMutablePointer<sockaddr>, _ saLen: inout socklen_t) throws -> ReturnType) rethrows -> ReturnType {
+        // We need to create a mutable copy of `self` so that we can pass it to `withUnsafePointer(to:_:)`.
+        var saLen = socklen_t(MemoryLayout<sockaddr>.size)
+        return try withUnsafeMutablePointer(to: &self) {
+            try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                try body($0, &saLen)
+            }
+        }
+    }
+
+    func withSockAddr<ReturnType>(_ body: (_ sa: UnsafePointer<sockaddr>, _ saLen: socklen_t) throws -> ReturnType) rethrows -> ReturnType {
+        // We need to create a mutable copy of `self` so that we can pass it to `withUnsafePointer(to:_:)`.
+        var ss = self
+        return try withUnsafePointer(to: &ss) {
+            try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                try body($0, socklen_t(MemoryLayout<sockaddr>.size))
+            }
+        }
+    }
+
+    func withSockAddrType<AddrType, ReturnType>(_ body: (_ sax: inout AddrType) throws -> ReturnType) rethrows -> ReturnType {
+        precondition(MemoryLayout<AddrType>.size <= MemoryLayout<sockaddr_storage>.size)
+        // We need to create a mutable copy of `self` so that we can pass it to `withUnsafePointer(to:_:)`.
+        var ss = self
+        return try withUnsafeMutablePointer(to: &ss) {
+            try $0.withMemoryRebound(to: AddrType.self, capacity: 1) {
+                try body(&$0.pointee)
+            }
+        }
+    }
+
+    public var debugDescription: String {
+        return withSockAddr { (sa, saLen) in
+            var name = Data(count: Int(NI_MAXHOST))
+            return name.withUnsafeMutableBytes { (bytes: UnsafeMutablePointer<CChar>) -> String in
+                try! posix(getnameinfo(sa, saLen, bytes, socklen_t(NI_MAXHOST), nil, 0, NI_NUMERICHOST))
+                return String(cString: bytes)
+            }
+        }
+    }
+}
+
+extension sockaddr_storage: SockAddr, CustomDebugStringConvertible {
+    init?(fromSockAddr sock: sockaddr) {
+        switch sock.sa_family {
+        case sa_family_t(AF_INET):
+            self = sock.withSockAddrType { (src: inout sockaddr_in) in
+                sockaddr_storage.fromSockAddr { (dst: inout sockaddr_in) in
+                    dst.sin_family = src.sin_family
+                    dst.sin_addr = src.sin_addr
+                    }.1
+            }
+        case sa_family_t(AF_INET6):
+            self = sock.withSockAddrType { (src: inout sockaddr_in6) in
+                sockaddr_storage.fromSockAddr { (dst: inout sockaddr_in6) in
+                    dst.sin6_family = src.sin6_family
+                    dst.sin6_addr = src.sin6_addr
+                    }.1
+            }
+        default: return nil
+        }
+    }
+
+    var port: UInt16? {
+        switch ss_family {
+        case sa_family_t(AF_INET):
+            return withSockAddrType { (src: inout sockaddr_in) in
+                src.sin_port.bigEndian
+            }
+        case sa_family_t(AF_INET6):
+            return withSockAddrType { (src: inout sockaddr_in6) in
+                src.sin6_port.bigEndian
+            }
+        default:
+            return nil
+        }
+    }
+}
+
+extension sockaddr: SockAddr, CustomDebugStringConvertible { }
+extension sockaddr_in: SockAddr, CustomDebugStringConvertible { }
+extension sockaddr_in6: SockAddr, CustomDebugStringConvertible { }
+
 
 extension sockaddr_storage {
 
@@ -22,9 +115,10 @@ extension sockaddr_storage {
     func withSockAddr<ReturnType>(_ body: (_ sa: UnsafePointer<sockaddr>, _ saLen: socklen_t) throws -> ReturnType) rethrows -> ReturnType {
         // We need to create a mutable copy of `self` so that we can pass it to `withUnsafePointer(to:_:)`.
         var ss = self
+        let ss_len = self.ss_family == sa_family_t(PF_INET) ? MemoryLayout<sockaddr_in>.size : MemoryLayout<sockaddr_in6>.size
         return try withUnsafePointer(to: &ss) {
             try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                try body($0, socklen_t(self.ss_len))
+                try body($0, socklen_t(ss_len))
             }
         }
     }

@@ -3,7 +3,11 @@ import Cifaddrs
 
 func posix(_ block: @autoclosure () -> Int32) throws {
     guard block() == 0 else {
-        throw POSIXError(POSIXErrorCode(rawValue: errno)!)
+        #if os(OSX)
+            throw POSIXError(POSIXError.Code(rawValue: errno)!)
+        #else
+            throw POSIXError(_nsError: NSError(domain: NSPOSIXErrorDomain, code: Int(errno)))
+        #endif
     }
 }
 
