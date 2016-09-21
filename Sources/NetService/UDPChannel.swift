@@ -19,13 +19,13 @@ public class UDPChannel {
     var runLoopSource6: CFRunLoopSource!
 
     public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoopMode) {
-        CFRunLoopAddSource(aRunLoop.getCFRunLoop(), runLoopSource4, CFRunLoopMode(mode.rawValue as CFString))
-        CFRunLoopAddSource(aRunLoop.getCFRunLoop(), runLoopSource6, CFRunLoopMode(mode.rawValue as CFString))
+        CFRunLoopAddSource(aRunLoop.getCFRunLoop(), runLoopSource4, .defaultMode)
+        CFRunLoopAddSource(aRunLoop.getCFRunLoop(), runLoopSource6, .defaultMode)
     }
 
     public func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
-        CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), runLoopSource4, CFRunLoopMode(mode.rawValue as CFString))
-        CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), runLoopSource6, CFRunLoopMode(mode.rawValue as CFString))
+        CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), runLoopSource4, .defaultMode)
+        CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), runLoopSource6, .defaultMode)
     }
 
     init() throws {
@@ -139,8 +139,12 @@ public class UDPChannel {
     internal func unicast<AddrType>(to address: AddrType, data: Data, socket: CFSocket) where AddrType: SockAddr {
         address.withSockAddr { (sa, saLen) in
             sa.withMemoryRebound(to: UInt8.self, capacity: Int(saLen)) {
-                let address = CFDataCreateWithBytesNoCopy(nil, $0, Int(saLen), kCFAllocatorNull)
-                precondition(CFSocketSendData(socket, address, data as CFData!, 2) == .success)
+                let address = CFDataCreateWithBytesNoCopy(nil, $0, Int(saLen), kCFAllocatorNull)!
+                #if os(OSX)
+                    precondition(CFSocketSendData(socket, address, data.bridge(), 2) == .success)
+                #else
+                    precondition(CFSocketSendData(socket, address, data.bridge(), 2) == kCFSocketSuccess)
+                #endif
             }
         }
     }
@@ -148,14 +152,14 @@ public class UDPChannel {
 
 func dataCallBack4(socket: CFSocket?, callBackType: CFSocketCallBackType, address: CFData?, data: UnsafeRawPointer?, info: UnsafeMutableRawPointer?) {
     let address = UnsafeRawPointer(CFDataGetBytePtr(address!)!).bindMemory(to: sockaddr_in.self, capacity: 1).pointee
-    let data = (Unmanaged<CFData>.fromOpaque(data!).takeUnretainedValue() as Data)
+    let data = (Unmanaged<CFData>.fromOpaque(data!).takeUnretainedValue().bridge())
     let _self = Unmanaged<UDPChannel>.fromOpaque(info!).takeUnretainedValue()
     _self.received?(address, data, socket!)
 }
 
 func dataCallBack6(socket: CFSocket?, callBackType: CFSocketCallBackType, address: CFData?, data: UnsafeRawPointer?, info: UnsafeMutableRawPointer?) {
     let address = UnsafeRawPointer(CFDataGetBytePtr(address!)!).bindMemory(to: sockaddr_in6.self, capacity: 1).pointee
-    let data = (Unmanaged<CFData>.fromOpaque(data!).takeUnretainedValue() as Data)
+    let data = (Unmanaged<CFData>.fromOpaque(data!).takeUnretainedValue().bridge())
     let _self = Unmanaged<UDPChannel>.fromOpaque(info!).takeUnretainedValue()
     _self.received?(address, data, socket!)
 }

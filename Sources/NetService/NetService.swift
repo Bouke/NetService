@@ -101,6 +101,7 @@ public class NetService: Responder, Listener {
         case stopped
         case lookingForDuplicates(Int, Timer)
         case published
+        case didNotPublish(Error)
 
         static func == (lhs: PublishState, rhs: PublishState) -> Bool {
             switch (lhs, rhs) {
@@ -113,7 +114,7 @@ public class NetService: Responder, Listener {
     var publishState: PublishState = .stopped
 
     public func publish(options: Options = []) {
-        precondition(publishState == .stopped)
+        precondition(publishState == .stopped, "invalid state, should be .stopped")
 
         client = try! Client.shared()
 
@@ -142,14 +143,27 @@ public class NetService: Responder, Listener {
                 sin.sin_family = sa_family_t(AF_INET)
                 sin.sin_addr = in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))
                 sin.sin_port = in_port_t(self.port).bigEndian
-                }.1
-            let socket = try! tcpListener(address: &ipv4)
+            }.1
+            let socket: CFSocket
+            do {
+                socket = try tcpListener(address: &ipv4)
+            } catch {
+                print("Could not create IPv4 listener")
+                return publishError(error: error)
+            }
+
             var ipv6 = sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in6) in
                 sin.sin6_family = sa_family_t(AF_INET6)
                 sin.sin6_addr = in6addr_any
                 sin.sin6_port = in_port_t(ipv4.port!).bigEndian
-                }.1
-            let socket6 = try! tcpListener(address: &ipv6)
+            }.1
+            let socket6: CFSocket
+            do {
+                print("Could not create IPv6 listener")
+                socket6 = try tcpListener(address: &ipv6)
+            } catch {
+                return publishError(error: error)
+            }
 
             port = Int(ipv4.port!)
 
@@ -204,6 +218,14 @@ public class NetService: Responder, Listener {
         broadcastService()
         publishState = .published
         delegate?.netServiceDidPublish(self)
+    }
+
+    func publishError(error: Error) {
+        if case .lookingForDuplicates(let (_, timer)) = publishState {
+            timer.invalidate()
+        }
+        publishState = .didNotPublish(error)
+        delegate?.netService(self, didNotPublish: [error.localizedDescription: 1])
     }
 
     func broadcastService() {
@@ -336,7 +358,12 @@ func acceptCallBack(socket: CFSocket?, callBackType: CFSocketCallBackType, addre
     var readStream: Unmanaged<CFReadStream>?
     var writeStream: Unmanaged<CFWriteStream>?
     CFStreamCreatePairWithSocket(nil, nativeHandle, &readStream, &writeStream)
-    service.delegate?.netService(service, didAcceptConnectionWith: readStream!.takeUnretainedValue(), outputStream: writeStream!.takeUnretainedValue())
+    #if os(OSX)
+        service.delegate?.netService(service, didAcceptConnectionWith: readStream!.takeUnretainedValue(), outputStream: writeStream!.takeUnretainedValue())
+    #else
+        print("Would call delegate.netService(:didAcceptConnectionWith:outputStream:), but cannot bridge the type")
+        abort()
+    #endif
 }
 
 

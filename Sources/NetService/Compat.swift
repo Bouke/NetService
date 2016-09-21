@@ -1,5 +1,19 @@
 import Foundation
 
+extension Data {
+    func bridge() -> CFData {
+        return withUnsafeBytes {
+            CFDataCreate(nil, $0, count)
+        }
+    }
+}
+
+extension CFData {
+    func bridge() -> Data {
+        return Data(bytes: CFDataGetBytePtr(self), count: CFDataGetLength(self))
+    }
+}
+
 #if os(OSX)
     // needed on OS X 10.11 El Capitan
     @objc
