@@ -1,8 +1,11 @@
 import class Foundation.NSNumber
-import class Foundation.InputStream
-import class Foundation.OutputStream
 import class Foundation.RunLoop
 import NetService
+
+#if os(OSX)
+    import class Foundation.InputStream
+    import class Foundation.OutputStream
+#endif
 
 
 // server
@@ -23,6 +26,14 @@ import NetService
 //let msg = Message(header: Header(id: 0, response: true, operationCode: .query, authoritativeAnswer: true, truncation: false, recursionDesired: false, recursionAvailable: false, returnCode: .NOERROR), questions: [], answers: [hapPointer], authorities: [], additional: [hapService, hapHost, hapInfo])
 
 class MyBrowserDelegate: NetServiceBrowserDelegate {
+    func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
+        print("Will search: \(browser)")
+    }
+
+    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
+        print("Did not search: \(errorDict)")
+    }
+
     public func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         print("Did find: \(service)")
     }
@@ -44,6 +55,7 @@ class MyServiceDelegate: NetServiceDelegate {
     }
 
     func netServiceDidPublish(_ sender: NetService) {
+        print("did publish")
         print("\(sender) did publish")
     }
 
@@ -75,7 +87,7 @@ let browserDelegate = MyBrowserDelegate()
 browser0.delegate = browserDelegate
 browser1.delegate = browserDelegate
 
-let ns = NetService(domain: "local.", type: "_hap._tcp.", name: "Zithoek", port: 8000)
+let ns = NetService(domain: "local.", type: "_airplay._tcp.", name: "demo", port: 8000)
 precondition(ns.setTXTRecord([
     "pv": "1.0", // state
     "id": "11:22:33:44:55:66:77:99", // identifier
@@ -88,9 +100,11 @@ precondition(ns.setTXTRecord([
 ]))
 let serviceDelegate = MyServiceDelegate()
 ns.delegate = serviceDelegate
-ns.publish(options: [.listenForConnections])
+ns.publish(options: [.noAutoRename, .listenForConnections])
 ns.schedule(in: .main, forMode: .defaultRunLoopMode)
 
 withExtendedLifetime((browser0, browser1, browserDelegate, ns, serviceDelegate)) {
     RunLoop.main.run()
 }
+
+print("Got here!")

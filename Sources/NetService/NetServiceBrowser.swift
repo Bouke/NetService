@@ -1,5 +1,6 @@
 import Foundation
 import DNS
+import Socket
 
 // TODO: track TTL of records
 public class NetServiceBrowser: Listener {
@@ -9,7 +10,11 @@ public class NetServiceBrowser: Listener {
     // MARK: Creating Network Service Browsers
 
     public init() {
-        client = try! Client.shared()
+        do {
+            client = try Client.shared()
+        } catch {
+            fatalError("Could not get shared UDP Client: \(error)")
+        }
         client.listeners.append(self)
     }
 
@@ -30,6 +35,7 @@ public class NetServiceBrowser: Listener {
     public func searchForServices(ofType type: String, inDomain domain: String) {
         assert(domain == "local.", "only local. domain is supported")
         assert(type.hasSuffix("."), "type label(s) should end with a period")
+        delegate?.netServiceBrowserWillSearch(self)
 
         currentSearch = (type, domain)
         let query = Message(header: Header(response: false), questions: [Question(name: "\(type).\(domain)", type: .pointer)])
@@ -59,22 +65,22 @@ public class NetServiceBrowser: Listener {
                 .flatMap { $0 as? HostRecord<IPv4> }
                 .filter { $0.name == serviceRecord.server }
                 .map { hostRecord in
-                    sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in) in
-                        sin.sin_family = sa_family_t(AF_INET)
-                        sin.sin_addr = hostRecord.ip.address
-                        sin.sin_port = serviceRecord.port
-                        }.1
-            }
+                    var sin = sockaddr_in()
+                    sin.sin_family = sa_family_t(AF_INET)
+                    sin.sin_addr = hostRecord.ip.address
+                    sin.sin_port = serviceRecord.port
+                    return Address.v4(sin)
+                }
             service.addresses! += message.additional
                 .flatMap { $0 as? HostRecord<IPv6> }
                 .filter { $0.name == serviceRecord.server }
                 .map { hostRecord in
-                    sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in6) in
-                        sin.sin6_family = sa_family_t(AF_INET6)
-                        sin.sin6_addr = hostRecord.ip.address
-                        sin.sin6_port = serviceRecord.port
-                        }.1
-            }
+                    var sin6 = sockaddr_in6()
+                    sin6.sin6_family = sa_family_t(AF_INET6)
+                    sin6.sin6_addr = hostRecord.ip.address
+                    sin6.sin6_port = serviceRecord.port
+                    return Address.v6(sin6)
+                }
 
             self.services.append(pointer.destination)
             self.delegate?.netServiceBrowser(self, didFind: service, moreComing: false)
@@ -83,6 +89,11 @@ public class NetServiceBrowser: Listener {
 }
 
 public protocol NetServiceBrowserDelegate: class {
+    func netServiceBrowserWillSearch(_ browser: NetServiceBrowser)
+
+    func netServiceBrowser(_ browser: NetServiceBrowser,
+                           didNotSearch errorDict: [String : NSNumber])
+
     func netServiceBrowser(_ browser: NetServiceBrowser,
                            didFind service: NetService,
                            moreComing: Bool)
