@@ -44,4 +44,5 @@ This code will start a search for the given service type.
 * Only search domain ``local.`` is supported
 * Changes in IP addresses (on reconnect) are not picked up
 * Does not accommodate for system sleep (service/browser should broadcast/query directly)
+* CFNetwork is missing on Linux, so project is a dead end (for now). See the ``linux`` branch for a version adopted for ``Glibc``.
 
