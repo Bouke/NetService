@@ -51,7 +51,7 @@ extension sockaddr_storage {
         var ss = sockaddr_storage()
         // Similarly, we need a mutable copy of our length for the benefit of `saLen`.
         var saLen = socklen_t(MemoryLayout<sockaddr_storage>.size)
-        let result = try withUnsafePointer(to: &ss) {
+        let result = try withUnsafeMutablePointer(to: &ss) {
             try $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                 try body($0, &saLen)
             }
@@ -131,7 +131,7 @@ extension sockaddr_storage {
         // We need a mutable `sockaddr_storage` so that we can pass it to `withUnsafePointer(to:_:)`.
         var ss = sockaddr_storage()
         ss.ss_len = __uint8_t(MemoryLayout<AddrType>.size)
-        let result = try withUnsafePointer(to: &ss) {
+        let result = try withUnsafeMutablePointer(to: &ss) {
             try $0.withMemoryRebound(to: AddrType.self, capacity: 1) {
                 try body(&$0.pointee)
             }

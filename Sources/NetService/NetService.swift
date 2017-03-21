@@ -323,7 +323,7 @@ func acceptCallBack(socket: CFSocket?, callBackType: CFSocketCallBackType, addre
 }
 
 
-public protocol NetServiceDelegate {
+public protocol NetServiceDelegate: class {
 
     // MARK: Using Network Services
 

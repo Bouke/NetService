@@ -82,7 +82,7 @@ public class NetServiceBrowser: Listener {
     }
 }
 
-public protocol NetServiceBrowserDelegate {
+public protocol NetServiceBrowserDelegate: class {
     func netServiceBrowser(_ browser: NetServiceBrowser,
                            didFind service: NetService,
                            moreComing: Bool)
