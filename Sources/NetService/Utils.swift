@@ -1,13 +1,12 @@
 #if os(OSX)
-    import var Darwin.errno
-    import func Darwin.gethostname
+    import Darwin
 #else
-    import var Glibc.errno
-    import func Glibc.gethostname
+    import Glibc
 #endif
 
 import struct Foundation.Data
 import Cifaddrs
+import Socket
 
 struct POSIXError: Error {
     let code: Code
@@ -182,3 +181,8 @@ func gethostname() throws -> String {
     }
 }
 
+func getLocalAddresses() -> [Socket.Address] {
+    return getifaddrs()
+        .filter { Int($0.pointee.ifa_flags) & Int(IFF_LOOPBACK) == 0 }
+        .flatMap { Socket.Address($0.pointee.ifa_addr) }
+}

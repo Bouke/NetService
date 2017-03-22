@@ -47,7 +47,7 @@ public class NetService: Responder, Listener {
 
     // MARK: Configuring Network Services
 
-    public internal(set) var addresses: [Address]?
+    public internal(set) var addresses: [Socket.Address]?
 
     public weak var delegate: NetServiceDelegate?
 
@@ -226,11 +226,7 @@ public class NetService: Responder, Listener {
         print("line \(#line):", "ppt: 3")
         // TODO: update host records on IP address changes
         hostRecords = []
-        addresses = getifaddrs()
-            .filter { Int($0.pointee.ifa_flags) & Int(IFF_LOOPBACK) == 0 }
-            .flatMap {
-                return Address($0.pointee.ifa_addr)
-            }
+        addresses = getLocalAddresses()
             .map {
                 var address = $0
                 address.port = UInt16(port)
@@ -239,10 +235,11 @@ public class NetService: Responder, Listener {
 
         hostRecords = addresses!.flatMap { (address) -> ResourceRecord? in
             switch address {
-            case .v4(let sin):
+            case .ipv4(let sin):
                 return HostRecord<IPv4>(name: hostName!, ttl: 120, ip: IPv4(address: sin.sin_addr))
-            case .v6(let sin6):
+            case .ipv6(let sin6):
                 return HostRecord<IPv6>(name: hostName!, ttl: 120, ip: IPv6(address: sin6.sin6_addr))
+            default: abort()
             }
         }
         

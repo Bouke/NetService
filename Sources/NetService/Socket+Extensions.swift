@@ -1,86 +1,92 @@
 #if os(OSX)
     import Darwin
-#elseif os(Linux)
+#else
     import Glibc
 #endif
 
-import struct Foundation.Data
+import Foundation
+import Socket
 
-public enum Address: CustomDebugStringConvertible {
-    case v4(sockaddr_in)
-    case v6(sockaddr_in6)
-    
+extension Socket.Address: CustomStringConvertible {
     public init?(_ sa: inout sockaddr) {
         switch sa.sa_family {
         case sa_family_t(AF_INET):
             self = withUnsafePointer(to: &sa) {
-                $0.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { Address.v4($0.pointee) }
+                $0.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
+                    .ipv4($0.pointee)
+                }
             }
         case sa_family_t(AF_INET6):
             self = withUnsafePointer(to: &sa) {
-                $0.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { Address.v6($0.pointee) }
+                $0.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
+                    .ipv6($0.pointee)
+                }
             }
         default: return nil
         }
     }
-    
+
     public init?(_ sa: UnsafeMutablePointer<sockaddr>) {
         switch sa.pointee.sa_family {
         case sa_family_t(AF_INET):
             self = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-                Address.v4($0.pointee)
+                .ipv4($0.pointee)
             }
         case sa_family_t(AF_INET6):
             self = sa.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-                Address.v6($0.pointee)
+                .ipv6($0.pointee)
             }
         default: return nil
         }
     }
-    
+
     public var port: UInt16 {
         get {
             switch self {
-            case .v4(let sin):
+            case .ipv4(let sin):
                 return sin.sin_port.bigEndian
-            case .v6(let sin6):
+            case .ipv6(let sin6):
                 return sin6.sin6_port.bigEndian
+            default: abort()
             }
         }
         set {
             switch self {
-            case .v4(var sin):
+            case .ipv4(var sin):
                 sin.sin_port = newValue.bigEndian
-                self = .v4(sin)
-            case .v6(var sin6):
+                self = .ipv4(sin)
+            case .ipv6(var sin6):
                 sin6.sin6_port = newValue.bigEndian
-                self = .v6(sin6)
+                self = .ipv6(sin6)
+            default: abort()
             }
         }
     }
-    
+
     public var presentation: String {
         var buffer = Data(count: Int(INET6_ADDRSTRLEN))
         switch self {
-        case .v4(var sin):
+        case .ipv4(var sin):
             let ptr = buffer.withUnsafeMutableBytes {
                 inet_ntop(AF_INET, &sin.sin_addr, $0, socklen_t(buffer.count))
             }
             return String(cString: ptr!)
-        case .v6(var sin6):
+        case .ipv6(var sin6):
             let ptr = buffer.withUnsafeMutableBytes {
                 inet_ntop(AF_INET6, &sin6.sin6_addr, $0, socklen_t(buffer.count))
             }
             return String(cString: ptr!)
+        default: abort()
         }
     }
-    
-    public var debugDescription: String {
+
+    public var description: String {
         switch self {
-        case .v4(_):
+        case .ipv4(_):
             return "\(presentation):\(port)"
-        case .v6(_):
+        case .ipv6(_):
             return "[\(presentation)]:\(port)"
+        default: abort()
         }
     }
 }

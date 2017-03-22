@@ -69,7 +69,7 @@ public class NetServiceBrowser: Listener {
                     sin.sin_family = sa_family_t(AF_INET)
                     sin.sin_addr = hostRecord.ip.address
                     sin.sin_port = serviceRecord.port
-                    return Address.v4(sin)
+                    return Socket.Address.ipv4(sin)
                 }
             service.addresses! += message.additional
                 .flatMap { $0 as? HostRecord<IPv6> }
@@ -79,7 +79,7 @@ public class NetServiceBrowser: Listener {
                     sin6.sin6_family = sa_family_t(AF_INET6)
                     sin6.sin6_addr = hostRecord.ip.address
                     sin6.sin6_port = serviceRecord.port
-                    return Address.v6(sin6)
+                    return Socket.Address.ipv6(sin6)
                 }
 
             self.services.append(pointer.destination)
