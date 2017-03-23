@@ -1,7 +1,13 @@
 import XCTest
-@testable import mDNS
+@testable import DNS
 
 class DNSTests: XCTestCase {
+    static var allTests : [(String, (DNSTests) -> () throws -> Void)] {
+        return [
+            ("testPointerRecord", testPointerRecord)
+        ]
+    }
+
     func testPointerRecord() {
         let pointer0 = PointerRecord(name: "_hap._tcp.local.", ttl: 120, destination: "Swift._hap._tcp.local.")
         let packed0 = try! pointer0.pack()

@@ -1,7 +1,22 @@
 import XCTest
-@testable import mDNS
+@testable import DNS
 
 class IPTests: XCTestCase {
+    static var allTests : [(String, (IPTests) -> () throws -> Void)] {
+        return [
+            ("testIPv4Valid", testIPv4Valid),
+            ("testIPv4Invalid", testIPv4Invalid),
+            ("testIPv4Predefined", testIPv4Predefined),
+            ("testIPv4Bytes", testIPv4Bytes),
+            ("testIPv4Literal", testIPv4Literal),
+            ("testIPv4Equality", testIPv4Equality),
+            ("testIPv6Valid", testIPv6Valid),
+            ("testIPv6Invalid", testIPv6Invalid),
+            ("testIPv6Predefined", testIPv6Predefined),
+            ("testIPv6Bytes", testIPv6Bytes)
+        ]
+    }
+
     func testIPv4Valid() {
         XCTAssertEqual(IPv4("0.0.0.0")?.presentation, "0.0.0.0")
         XCTAssertEqual(IPv4("127.0.0.1")?.presentation, "127.0.0.1")
@@ -22,10 +37,12 @@ class IPTests: XCTestCase {
         XCTAssertEqual(IPv4(INADDR_UNSPEC_GROUP), IPv4("224.0.0.0"))
         XCTAssertEqual(IPv4(INADDR_ALLHOSTS_GROUP), IPv4("224.0.0.1"))
         XCTAssertEqual(IPv4(INADDR_ALLRTRS_GROUP), IPv4("224.0.0.2"))
-        XCTAssertEqual(IPv4(INADDR_ALLRPTS_GROUP), IPv4("224.0.0.22"))
-        XCTAssertEqual(IPv4(INADDR_CARP_GROUP), IPv4("224.0.0.18"))
-        XCTAssertEqual(IPv4(INADDR_PFSYNC_GROUP), IPv4("224.0.0.240"))
-        XCTAssertEqual(IPv4(INADDR_ALLMDNS_GROUP), IPv4("224.0.0.251"))
+        #if os(OSX)
+            XCTAssertEqual(IPv4(INADDR_ALLRPTS_GROUP), IPv4("224.0.0.22"))
+            XCTAssertEqual(IPv4(INADDR_CARP_GROUP), IPv4("224.0.0.18"))
+            XCTAssertEqual(IPv4(INADDR_PFSYNC_GROUP), IPv4("224.0.0.240"))
+            XCTAssertEqual(IPv4(INADDR_ALLMDNS_GROUP), IPv4("224.0.0.251"))
+        #endif
         XCTAssertEqual(IPv4(INADDR_MAX_LOCAL_GROUP), IPv4("224.0.0.255"))
     }
 
@@ -63,9 +80,11 @@ class IPTests: XCTestCase {
     func testIPv6Predefined() {
         XCTAssertEqual(IPv6(address: in6addr_any), IPv6("::"))
         XCTAssertEqual(IPv6(address: in6addr_loopback), IPv6("::1"))
-        XCTAssertEqual(IPv6(address: in6addr_nodelocal_allnodes), IPv6("ff01::1"))
-        XCTAssertEqual(IPv6(address: in6addr_linklocal_allnodes), IPv6("ff02::1"))
-        XCTAssertEqual(IPv6(address: in6addr_linklocal_allrouters), IPv6("ff02::2"))
+        #if os(OSX)
+            XCTAssertEqual(IPv6(address: in6addr_nodelocal_allnodes), IPv6("ff01::1"))
+            XCTAssertEqual(IPv6(address: in6addr_linklocal_allnodes), IPv6("ff02::1"))
+            XCTAssertEqual(IPv6(address: in6addr_linklocal_allrouters), IPv6("ff02::2"))
+        #endif
    }
 
     func testIPv6Bytes() {
