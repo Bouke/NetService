@@ -1,6 +1,7 @@
 import class Foundation.NSNumber
 import class Foundation.RunLoop
 import NetService
+import Socket
 
 #if os(OSX)
     import class Foundation.InputStream
@@ -67,13 +68,11 @@ class MyServiceDelegate: NetServiceDelegate {
         print("\(sender) did stop")
     }
 
-    func netService(_ sender: NetService, didAcceptConnectionWith inputStream: InputStream, outputStream: OutputStream) {
-        print(sender, inputStream, outputStream)
-        precondition(false)
-        inputStream.open()
-        inputStream.close()
-        outputStream.open()
-        outputStream.close()
+    public func netService(_ sender: NetService, didAcceptConnectionWith socket: Socket) {
+        print("Did accept connection")
+        print(try! socket.readString())
+        try! socket.write(from: "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, world!")
+        socket.close()
     }
 }
 
@@ -101,7 +100,6 @@ precondition(ns.setTXTRecord([
 let serviceDelegate = MyServiceDelegate()
 ns.delegate = serviceDelegate
 ns.publish(options: [.noAutoRename, .listenForConnections])
-ns.schedule(in: .main, forMode: .defaultRunLoopMode)
 
 withExtendedLifetime((browser0, browser1, browserDelegate, ns, serviceDelegate)) {
     RunLoop.main.run()

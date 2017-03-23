@@ -1,5 +1,6 @@
-#if !os(OSX)
-    import CoreFoundation
+#if os(Linux)
+//    import CoreFoundation
+    import Dispatch
 #endif
 
 import Foundation
@@ -61,36 +62,10 @@ public class NetService: Responder, Listener {
         return true
     }
 
-    // MARK: Managing Run Loops
-
-    var currentRunLoop: RunLoop?
-
-    public func schedule(in aRunLoop: RunLoop,
-                         forMode mode: RunLoopMode) {
-        currentRunLoop = aRunLoop
-        if let source = socket4?.1 {
-            CFRunLoopAddSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
-        }
-
-        if let source = socket6?.1 {
-            CFRunLoopAddSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
-        }
-    }
-
-    public func remove(from aRunLoop: RunLoop,
-                       forMode mode: RunLoopMode) {
-        currentRunLoop = nil
-        if let source = socket4?.1 {
-            CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
-        }
-        if let source = socket6?.1 {
-            CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), source, .defaultMode)
-        }
-    }
-
     // MARK: Using Network Services
-    var socket4: (CFSocket, CFRunLoopSource)?
-    var socket6: (CFSocket, CFRunLoopSource)?
+    var listenQueue: DispatchQueue?
+    var socket4: Socket?
+    var socket6: Socket?
 
     var client: Client?
     var pointerRecord: PointerRecord?
@@ -139,63 +114,30 @@ public class NetService: Responder, Listener {
         if options.contains(.listenForConnections) {
             precondition(type.hasSuffix("._tcp."), "only listening on TCP is supported")
 
-            var ipv4 = sockaddr_in()
-            ipv4.sin_family = sa_family_t(AF_INET)
-            ipv4.sin_addr = in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))
-            ipv4.sin_port = in_port_t(self.port).bigEndian
+            listenQueue = DispatchQueue.global(qos: .userInteractive)
 
-            let socket: CFSocket
-            do {
-                #if os(OSX)
-                    let fd = Darwin.socket(Int32(ipv4.sin_family), SOCK_STREAM, IPPROTO_TCP)
-                #else
-                    let fd = Glibc.socket(Int32(ipv4.sin_family), Int32(SOCK_STREAM.rawValue), Int32(IPPROTO_TCP))
-                #endif
-                guard fd >= 0 else {
-                    throw POSIXError()
+            socket4 = try! Socket.create(family: .inet, type: .stream, proto: .tcp)
+            try! socket4!.listen(on: self.port)
+            self.port = Int(socket4!.signature!.port)
+
+            listenQueue!.async { [unowned self] in
+                while true {
+                    let clientSocket = try! self.socket4!.acceptClientConnection()
+                    self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
                 }
-                var yes: UInt32 = 1
-                try posix(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, socklen_t(MemoryLayout<UInt32>.size)))
-                try ipv4.withSockAddr {
-                    try posix(bind(fd, $0, $1))
-                    try posix(listen(fd, 4))
-                    try posix(getsockname(fd, $0, &$1))
-                }
-                var context = CFSocketContext()
-                context.info = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-                #if os(OSX)
-                    socket = CFSocketCreateWithNative(nil, fd, CFSocketCallBackType.acceptCallBack.rawValue, acceptCallBack, &context)!
-                #else
-                    socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketAcceptCallBack), acceptCallBack, &context)!
-                #endif
-            } catch {
-                return publishError(error: error)
             }
 
-//            var ipv6 = sockaddr_storage.fromSockAddr { (sin: inout sockaddr_in6) in
-//                sin.sin6_family = sa_family_t(AF_INET6)
-//                sin.sin6_addr = in6addr_any
-//                sin.sin6_port = in_port_t(ipv4.port!).bigEndian
-//            }.1
-//            let socket6: CFSocket
-//            do {
-//                socket6 = try tcpListener(address: &ipv6)
-//            } catch {
-//                print("line \(#line):", "Could not create IPv6 listener")
-//                return publishError(error: error)
+//            socket6 = try! Socket.create(family: .inet6, type: .stream, proto: .tcp)
+//            try! socket6!.listen(on: self.port)
+
+//            listenQueue!.async { [unowned self] in
+//                while true {
+//                    let clientSocket = try! self.socket6!.acceptClientConnection()
+//                    self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
+//                }
 //            }
-//            print("line \(#line):", port, ipv6, Int(ipv6.port!))
 
-            port = Int(ipv4.port)
             print("line \(#line):", "listening on port: \(port)")
-
-            self.socket4 = (socket, CFSocketCreateRunLoopSource(nil, socket, 0)!)
-//            self.socket6 = (socket6, CFSocketCreateRunLoopSource(nil, socket6, 0)!)
-
-            if let currentRunLoop = currentRunLoop {
-                CFRunLoopRemoveSource(currentRunLoop.getCFRunLoop(), self.socket4!.1, .defaultMode)
-//                CFRunLoopRemoveSource(currentRunLoop.getCFRunLoop(), self.socket6!.1, .defaultMode)
-            }
         }
 
         if options.contains(.noAutoRename) {
@@ -331,9 +273,7 @@ public class NetService: Responder, Listener {
 
     public func stop() {
         precondition(publishState == .published)
-
-        CFSocketInvalidate(socket4!.0)
-        CFSocketInvalidate(socket6!.0)
+        preconditionFailure("Not implemented")
 
         pointerRecord!.ttl = 0
         serviceRecord!.ttl = 0
@@ -359,24 +299,6 @@ extension NetService: CustomDebugStringConvertible {
 }
 
 
-func acceptCallBack(socket: CFSocket?, callBackType: CFSocketCallBackType, address: CFData?, data: UnsafeRawPointer?, info: UnsafeMutableRawPointer?) {
-    print("line \(#line):", "acb 1")
-    let service = Unmanaged<NetService>.fromOpaque(info!).takeUnretainedValue()
-    let nativeHandle = data!.bindMemory(to: CFSocketNativeHandle.self, capacity: 1).pointee
-    var readStream: Unmanaged<CFReadStream>?
-    var writeStream: Unmanaged<CFWriteStream>?
-    CFStreamCreatePairWithSocket(nil, nativeHandle, &readStream, &writeStream)
-//    #if os(OSX)
-        service.delegate?.netService(service,
-                                     didAcceptConnectionWith: readStream!.takeUnretainedValue().bridge(),
-                                     outputStream: writeStream!.takeUnretainedValue().bridge())
-//    #else
-//        print("line \(#line):", "Would call delegate.netService(:didAcceptConnectionWith:outputStream:), but cannot bridge the type")
-//        abort()
-//    #endif
-}
-
-
 public protocol NetServiceDelegate: class {
 
     // MARK: Using Network Services
@@ -393,6 +315,5 @@ public protocol NetServiceDelegate: class {
     // MARK: Accepting Connections
 
     func netService(_ sender: NetService,
-                    didAcceptConnectionWith inputStream: InputStream,
-                    outputStream: OutputStream)
+                    didAcceptConnectionWith socket: Socket)
 }
