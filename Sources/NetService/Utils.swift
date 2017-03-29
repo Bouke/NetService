@@ -161,7 +161,6 @@ struct POSIXError: Error {
 
 func posix(_ block: @autoclosure () -> Int32, file: String = #file, line: Int = #line, column: Int = #column, function: String = #function) throws {
     guard block() == 0 else {
-        print(errno)
         throw POSIXError(file: file, line: line, column: column, function: function)
     }
 }

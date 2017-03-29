@@ -8,7 +8,7 @@ import Foundation
 import Socket
 
 extension Socket.Address: CustomStringConvertible {
-    public init?(_ sa: inout sockaddr) {
+    init?(_ sa: inout sockaddr) {
         switch sa.sa_family {
         case sa_family_t(AF_INET):
             self = withUnsafePointer(to: &sa) {
@@ -26,7 +26,7 @@ extension Socket.Address: CustomStringConvertible {
         }
     }
 
-    public init?(_ sa: UnsafeMutablePointer<sockaddr>) {
+    init?(_ sa: UnsafeMutablePointer<sockaddr>) {
         switch sa.pointee.sa_family {
         case sa_family_t(AF_INET):
             self = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
@@ -63,7 +63,7 @@ extension Socket.Address: CustomStringConvertible {
         }
     }
 
-    public var presentation: String {
+    var presentation: String {
         var buffer = Data(count: Int(INET6_ADDRSTRLEN))
         switch self {
         case .ipv4(var sin):

@@ -6,7 +6,7 @@ import Foundation
     import Glibc
 #endif
 
-public protocol SockAddr {
+protocol SockAddr {
     var length: socklen_t { get }
 }
 
@@ -83,53 +83,8 @@ extension SockAddr {
     }
 }
 
-//extension sockaddr_storage: SockAddr, CustomDebugStringConvertible {
-//    init?(fromSockAddr sock: sockaddr) {
-//        switch sock.sa_family {
-//        case sa_family_t(AF_INET):
-//            self = sock.withSockAddrType { (src: inout sockaddr_in) in
-//                sockaddr_storage.fromSockAddr { (dst: inout sockaddr_in) in
-//                    dst.sin_family = src.sin_family
-//                    dst.sin_addr = src.sin_addr
-//                    }.1
-//            }
-//        case sa_family_t(AF_INET6):
-//            self = sock.withSockAddrType { (src: inout sockaddr_in6) in
-//                sockaddr_storage.fromSockAddr { (dst: inout sockaddr_in6) in
-//                    dst.sin6_family = src.sin6_family
-//                    dst.sin6_addr = src.sin6_addr
-//                    }.1
-//            }
-//        default: return nil
-//        }
-//    }
-//
-//    var length: socklen_t {
-//        switch ss_family {
-//        case sa_family_t(PF_INET): return socklen_t(MemoryLayout<sockaddr_in>.size)
-//        case sa_family_t(PF_INET6): return socklen_t(MemoryLayout<sockaddr_in6>.size)
-//        default: fatalError("No length defined for family \(ss_family)")
-//        }
-//    }
-//
-//    var port: UInt16? {
-//        switch ss_family {
-//        case sa_family_t(AF_INET):
-//            return withSockAddrType { (src: inout sockaddr_in) in
-//                src.sin_port.bigEndian
-//            }
-//        case sa_family_t(AF_INET6):
-//            return withSockAddrType { (src: inout sockaddr_in6) in
-//                src.sin6_port.bigEndian
-//            }
-//        default:
-//            return nil
-//        }
-//    }
-//}
-
 extension sockaddr: SockAddr {
-    public var length: socklen_t {
+    var length: socklen_t {
         switch sa_family {
         case sa_family_t(PF_INET): return socklen_t(MemoryLayout<sockaddr_in>.size)
         case sa_family_t(PF_INET6): return socklen_t(MemoryLayout<sockaddr_in6>.size)
@@ -156,7 +111,7 @@ extension sockaddr: SockAddr {
 }
 
 extension sockaddr_in: SockAddr {
-    public var length: socklen_t {
+    var length: socklen_t {
         return socklen_t(MemoryLayout<sockaddr_in>.size)
     }
     
@@ -166,7 +121,7 @@ extension sockaddr_in: SockAddr {
 }
 
 extension sockaddr_in6: SockAddr {
-    public var length: socklen_t {
+    var length: socklen_t {
         return socklen_t(MemoryLayout<sockaddr_in6>.size)
     }
 

@@ -45,3 +45,7 @@ This code will start a search for the given service type.
 * Changes in IP addresses (on reconnect) are not picked up
 * Does not accommodate for system sleep (service/browser should broadcast/query directly)
 * CFNetwork is missing on Linux, so project is a dead end (for now).
+
+## Credits
+
+This library was written by [Bouke Haarsma](https://twitter.com/BoukeHaarsma).

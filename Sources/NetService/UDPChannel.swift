@@ -9,20 +9,20 @@ import Foundation
 import DNS
 
 
-public class UDPChannel {
+class UDPChannel {
     var received: ((_ address: SockAddr, _ data: Data, _ socket: CFSocket) -> ())?
 
     var socket4: (CFSocket, CFRunLoopSource)?
     var socket6: (CFSocket, CFRunLoopSource)?
 
-    public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoopMode) {
+    func schedule(in aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         if let socket4 = socket4 {
             CFRunLoopAddSource(aRunLoop.getCFRunLoop(), socket4.1, .defaultMode)
         }
 //        CFRunLoopAddSource(aRunLoop.getCFRunLoop(), runLoopSource6, .defaultMode)
     }
 
-    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
+    func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         if let socket4 = socket4 {
             CFRunLoopRemoveSource(aRunLoop.getCFRunLoop(), socket4.1, .defaultMode)
         }
@@ -40,7 +40,6 @@ public class UDPChannel {
         guard fd4 >= 0 else {
             throw POSIXError()
         }
-        print("udp socket", fd4)
 
         var context = CFSocketContext()
         context.info = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
@@ -77,10 +76,6 @@ public class UDPChannel {
         #endif
 
         self.socket4 = (socket4, CFSocketCreateRunLoopSource(nil, socket4, 0))
-
-        print("c21")
-
-
 
 //        #if os(OSX)
 //            let fd6 = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
@@ -122,7 +117,7 @@ public class UDPChannel {
 //        runLoopSource6 = CFSocketCreateRunLoopSource(nil, socket6, 0)
     }
 
-    internal func multicast(data: Data) {
+    func multicast(data: Data) {
         var ipv4Group = sockaddr_in()
         ipv4Group.sin_family = sa_family_t(AF_INET)
         ipv4Group.sin_addr = IPv4("224.0.0.251")!.address
@@ -132,7 +127,7 @@ public class UDPChannel {
         //todo send to ipv6 group as well
     }
 
-    internal func unicast<AddrType>(to address: inout AddrType, data: Data, socket: CFSocket) where AddrType: SockAddr {
+    func unicast<AddrType>(to address: inout AddrType, data: Data, socket: CFSocket) where AddrType: SockAddr {
         address.withSockAddr { (sa, saLen) in
             sa.withMemoryRebound(to: UInt8.self, capacity: Int(saLen)) {
                 let address = CFDataCreateWithBytesNoCopy(nil, $0, Int(saLen), kCFAllocatorNull)!

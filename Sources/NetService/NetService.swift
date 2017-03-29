@@ -127,17 +127,15 @@ public class NetService: Responder, Listener {
                 }
             }
 
-//            socket6 = try! Socket.create(family: .inet6, type: .stream, proto: .tcp)
-//            try! socket6!.listen(on: self.port)
+            socket6 = try! Socket.create(family: .inet6, type: .stream, proto: .tcp)
+            try! socket6!.listen(on: self.port)
 
-//            listenQueue!.async { [unowned self] in
-//                while true {
-//                    let clientSocket = try! self.socket6!.acceptClientConnection()
-//                    self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
-//                }
-//            }
-
-            print("line \(#line):", "listening on port: \(port)")
+            listenQueue!.async { [unowned self] in
+                while true {
+                    let clientSocket = try! self.socket6!.acceptClientConnection()
+                    self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
+                }
+            }
         }
 
         if options.contains(.noAutoRename) {
@@ -155,17 +153,14 @@ public class NetService: Responder, Listener {
         } catch {
             return publishError(error: error)
         }
-        print("line \(#line):", "ppt: 1")
         precondition(hostName!.hasSuffix(domain), "host name \(hostName) should have suffix \(domain)")
 
         // publish mdns
         pointerRecord = PointerRecord(name: "\(type)\(domain)", ttl: 4500, destination: fqdn)
 
-        print("line \(#line):", "ppt: 2")
         precondition(port > 0, "Port not configured")
         serviceRecord = ServiceRecord(name: fqdn, ttl: 120, port: UInt16(port), server: hostName!)
 
-        print("line \(#line):", "ppt: 3")
         // TODO: update host records on IP address changes
         hostRecords = []
         addresses = getLocalAddresses()
@@ -190,10 +185,8 @@ public class NetService: Responder, Listener {
         // prepare for questions
         client!.responders.append(self)
 
-        print("line \(#line):", "ppt: 6")
         // broadcast availability
         broadcastService()
-        print("line \(#line):", "ppt: 7")
         publishState = .published
         delegate?.netServiceDidPublish(self)
     }
