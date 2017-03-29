@@ -7,6 +7,44 @@
 import Foundation
 import Socket
 
+enum Membership {
+    case ipv4(ip_mreq)
+    case ipv6(ipv6_mreq)
+    
+    init(address: in_addr) {
+        self = .ipv4(ip_mreq(imr_multiaddr: address,
+                             imr_interface: in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))))
+    }
+}
+
+extension Socket {
+    func join(membership: Membership) throws {
+        switch membership {
+        case .ipv4(var ip_mreq):
+            #if os(OSX)
+                try posix(setsockopt(socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #else
+                try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IP_ADD_MEMBERSHIP), &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #endif
+        case .ipv6(_):
+            break
+        }
+    }
+
+    func leave(membership: Membership) throws {
+        switch membership {
+        case .ipv4(var ip_mreq):
+            #if os(OSX)
+                try posix(setsockopt(socketfd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #else
+                try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IP_DROP_MEMBERSHIP), &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #endif
+        case .ipv6(_):
+            break
+        }
+    }
+}
+
 extension Socket.Address: CustomStringConvertible {
     init?(_ sa: inout sockaddr) {
         switch sa.sa_family {
@@ -79,7 +117,7 @@ extension Socket.Address: CustomStringConvertible {
         default: abort()
         }
     }
-
+    
     public var description: String {
         switch self {
         case .ipv4(_):

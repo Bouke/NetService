@@ -1,5 +1,4 @@
 #if os(Linux)
-//    import CoreFoundation
     import Dispatch
 #endif
 
@@ -153,7 +152,7 @@ public class NetService: Responder, Listener {
         } catch {
             return publishError(error: error)
         }
-        precondition(hostName!.hasSuffix(domain), "host name \(hostName) should have suffix \(domain)")
+        precondition(hostName!.hasSuffix(domain), "host name \(String(describing: hostName)) should have suffix \(domain)")
 
         // publish mdns
         pointerRecord = PointerRecord(name: "\(type)\(domain)", ttl: 4500, destination: fqdn)
@@ -287,7 +286,7 @@ public class NetService: Responder, Listener {
 
 extension NetService: CustomDebugStringConvertible {
     public var debugDescription: String {
-        return "NetService(domain: \(domain), type: \(type), name: \(name), port: \(port), hostName: \(hostName)), addresses: \(addresses))"
+        return "NetService(domain: \(domain), type: \(type), name: \(name), port: \(port), hostName: \(String(describing: hostName))), addresses: \(String(describing: addresses)))"
     }
 }
 
