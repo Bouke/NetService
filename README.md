@@ -9,6 +9,8 @@ things are shaping up nicely.
 
 ## Usage
 
+See also [NetService-Example](https://github.com/Bouke/NetService-Example).
+
 ### Publish a NetService
 
 This code will publish a new NetService. It will also setup both IPv4 and IPv6 listening sockets at an available port.
@@ -35,24 +37,6 @@ withExtendedLifetime((browser, delegate)) {
     RunLoop.main.run()
 }
 ```
-
-## Status
-
-### API
-
-* [x] NetService.publish
-* [x] NetService.publish([.noAutoRename, .listenForConnections])
-* [x] NetServiceBrowser.searchForServices(ofType:inDomain:)
-* [ ] Other methods on NetService
-* [ ] Other methods on NetServiceBrowser
-
-### Issues
-
-* Starting a NetService after previously stopping it with `.listenForConnections` doesn't accept any new connects
-* API not 100% compatible with Cocoa counterpart
-* Only search domain ``local.`` is supported
-* Changes in IP addresses (on reconnect) are not picked up
-* Does not accommodate for system sleep (service/browser should broadcast/query directly)
 
 ## Credits
 
