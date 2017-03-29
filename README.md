@@ -5,6 +5,8 @@ network. On macOS NetService is included with Cocoa, however on Linux there's
 no such thing in the standard library. There might be rough edges, however
 things are shaping up nicely.
 
+[![Build Status](https://travis-ci.org/Bouke/NetService.svg?branch=master)](https://travis-ci.org/Bouke/NetService)
+
 ## Usage
 
 ### Publish a NetService
