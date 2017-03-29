@@ -258,7 +258,7 @@ public class NetService: Responder, Listener {
     }
 
     public func resolve(withTimeout timeout: TimeInterval) {
-
+        preconditionFailure("Not implemented")
     }
 
     public internal(set) var port: Int = -1

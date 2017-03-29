@@ -31,10 +31,12 @@ class Client: UDPChannelDelegate {
 
     private init() throws {
         channel = try UDPChannel(group: ipv4Group, queue: queue)
+        channel = try UDPChannel(group: ipv6Group, queue: queue)
         channel.delegate = self
     }
     
-    func channel(_ channel: UDPChannel, didReceive data: Data) -> Data? {
+    func channel(_ channel: UDPChannel, didReceive data: Data, from address: Socket.Address?) -> Data? {
+        print("Received from \(String(describing: address))")
         let message = Message(unpack: data)
        
         if message.header.response {

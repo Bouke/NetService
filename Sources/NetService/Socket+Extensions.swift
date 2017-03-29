@@ -21,6 +21,9 @@ enum Membership {
         case .ipv4(let sin):
             self = .ipv4(ip_mreq(imr_multiaddr: sin.sin_addr,
                                  imr_interface: in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))))
+        case .ipv6(let sin6):
+            self = .ipv6(ipv6_mreq(ipv6mr_multiaddr: sin6.sin6_addr,
+                                   ipv6mr_interface: 0))
         default: return nil
         }
     }
@@ -35,8 +38,12 @@ extension Socket {
             #else
                 try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IP_ADD_MEMBERSHIP), &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
             #endif
-        case .ipv6(_):
-            break
+        case .ipv6(var ipv6_mreq):
+            #if os(OSX)
+                try posix(setsockopt(socketfd, IPPROTO_IP, IPV6_JOIN_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #else
+                try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IPV6_JOIN_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #endif
         }
     }
 
@@ -48,8 +55,12 @@ extension Socket {
             #else
                 try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IP_DROP_MEMBERSHIP), &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
             #endif
-        case .ipv6(_):
-            break
+        case .ipv6(var ipv6_mreq):
+            #if os(OSX)
+                try posix(setsockopt(socketfd, IPPROTO_IP, IPV6_LEAVE_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #else
+                try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IPV6_LEAVE_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+            #endif
         }
     }
 }
