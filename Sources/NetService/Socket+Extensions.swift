@@ -15,6 +15,15 @@ enum Membership {
         self = .ipv4(ip_mreq(imr_multiaddr: address,
                              imr_interface: in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))))
     }
+
+    init?(address: Socket.Address) {
+        switch address {
+        case .ipv4(let sin):
+            self = .ipv4(ip_mreq(imr_multiaddr: sin.sin_addr,
+                                 imr_interface: in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))))
+        default: return nil
+        }
+    }
 }
 
 extension Socket {

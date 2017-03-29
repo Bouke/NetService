@@ -6,7 +6,15 @@ import Socket
 #endif
 
 
-class Client {
+class Client: UDPChannelDelegate {
+    let ipv4Group: Socket.Address = {
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_addr = IPv4("224.0.0.251")!.address
+        addr.sin_port = (5353 as in_port_t).bigEndian
+        return .ipv4(addr)
+    }()
+    
     private static var _shared: Client?
     internal static func shared() throws -> Client {
         if let shared = _shared {
@@ -19,36 +27,16 @@ class Client {
     internal var listeners = [Listener]()
     internal var responders = [Responder]()
     let queue = DispatchQueue.global(qos: .userInteractive)
-    let socket: Socket
+    let channel: UDPChannel
 
     private init() throws {
-        socket = try Socket.create(family: .inet, type: .datagram, proto: .udp)
-        try socket.listen(on: 5353)
-        try socket.join(membership: Membership(address: in_addr("224.0.0.251")!))
-
-        var ipv4Group = sockaddr_in()
-        ipv4Group.sin_family = sa_family_t(AF_INET)
-        ipv4Group.sin_addr = IPv4("224.0.0.251")!.address
-        ipv4Group.sin_port = (5353 as in_port_t).bigEndian
-        
-        queue.async {
-            while true {
-                var buffer = Data(capacity: 1024) //todo: how big's the buffer?
-                _ = try! self.socket.readDatagram(into: &buffer)
-                let response = self.received(buffer: buffer, onSocket: self.socket)
-                if let response = response {
-                    print("Sending response: \(response)")
-                    try! self.socket.write(from: Data(bytes: response.pack()), to: .ipv4(ipv4Group))
-                }
-            }
-        }
+        channel = try UDPChannel(group: ipv4Group, queue: queue)
+        channel.delegate = self
     }
     
-    func received(buffer: Data, onSocket socket: Socket) -> Message? {
-        let message = Message(unpack: buffer)
+    func channel(_ channel: UDPChannel, didReceive data: Data) -> Data? {
+        let message = Message(unpack: data)
        
-        print("Got message: \(message)")
-        
         if message.header.response {
             for listener in self.listeners {
                 listener.received(message: message)
@@ -72,16 +60,13 @@ class Client {
                 return nil
             }
             
-            return Message(header: Header(response: true), answers: answers, authorities: authorities, additional: additional)
+            let message = Message(header: Header(response: true), answers: answers, authorities: authorities, additional: additional)
+            return try! Data(bytes: message.pack())
         }
     }
-
-    internal func multicast(message: Message) {
-        var ipv4Group = sockaddr_in()
-        ipv4Group.sin_family = sa_family_t(AF_INET)
-        ipv4Group.sin_addr = IPv4("224.0.0.251")!.address
-        ipv4Group.sin_port = (5353 as in_port_t).bigEndian
-        try! socket.write(from: Data(bytes: message.pack()), to: .ipv4(ipv4Group))
+    
+    func multicast(message: Message) {
+        try! channel.multicast(Data(bytes: message.pack()))
     }
 }
 
