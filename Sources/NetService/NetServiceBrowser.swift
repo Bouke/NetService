@@ -39,7 +39,11 @@ public class NetServiceBrowser: Listener {
 
         currentSearch = (type, domain)
         let query = Message(header: Header(response: false), questions: [Question(name: "\(type).\(domain)", type: .pointer)])
-        client.multicast(message: query)
+        do {
+            try client.multicast(message: query)
+        } catch {
+            delegate?.netServiceBrowser(self, didNotSearch: [error.localizedDescription: -1])
+        }
     }
 
     func received(message: Message) {

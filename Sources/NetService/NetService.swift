@@ -91,7 +91,11 @@ public class NetService: Responder, Listener {
     public func publish(options: Options = []) {
         precondition(publishState == .stopped, "invalid state, should be .stopped")
 
-        client = try! Client.shared()
+        do {
+            client = try! Client.shared()
+        } catch {
+            return publishError(error: error)
+        }
 
         // TODO: support ipv6
         // TODO: auto rename
@@ -103,7 +107,11 @@ public class NetService: Responder, Listener {
             // check if name is taken -- allow others a few seconds to respond
 
             client!.listeners.append(self)
-            client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+            do {
+                try client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+            } catch {
+                return publishError(error: error)
+            }
             // TODO: remove listener
 
             let timer = Timer._scheduledTimer(withTimeInterval: duplicateNameCheckTimeInterval, repeats: false, block: {_ in self.publishPhaseTwo()})
@@ -201,13 +209,17 @@ public class NetService: Responder, Listener {
         case let error as POSIXError:
             delegate?.netService(self, didNotPublish: ["\(error.code.rawValue)": NSNumber(integerLiteral: Int(error.code.rawValue))])
         default:
-            delegate?.netService(self, didNotPublish: [error.localizedDescription: -1])
+            delegate?.netService(self, didNotPublish: [String(describing: error): -1])
         }
 
     }
 
     func broadcastService() {
-        client!.multicast(message: Message(header: Header(response: true), answers: [pointerRecord!], additional: [serviceRecord!] + hostRecords!))
+        do {
+            try client!.multicast(message: Message(header: Header(response: true), answers: [pointerRecord!], additional: [serviceRecord!] + hostRecords!))
+        } catch {
+            return publishError(error: error)
+        }
     }
 
     func respond(toMessage message: Message) -> (answers: [ResourceRecord], authorities: [ResourceRecord], additional: [ResourceRecord])? {
@@ -248,7 +260,11 @@ public class NetService: Responder, Listener {
             timer.invalidate()
 
             fqdn = "\(name) (\(number + 1)).\(type)\(domain)"
-            client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+            do {
+                try client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+            } catch {
+                return publishError(error: error)
+            }
             let timer = Timer._scheduledTimer(withTimeInterval: duplicateNameCheckTimeInterval, repeats: false, block: {_ in
                 self.name = "\(self.name) (\(number + 1))"
                 self.publishPhaseTwo()

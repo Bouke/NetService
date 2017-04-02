@@ -7,6 +7,10 @@ import Socket
 
 
 class Client: UDPChannelDelegate {
+    enum Error: Swift.Error {
+        case channelSetupError(Swift.Error)
+    }
+    
     let ipv4Group: Socket.Address = {
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
@@ -94,8 +98,8 @@ class Client: UDPChannelDelegate {
         }
     }
     
-    func multicast(message: Message) {
-        try! channel.multicast(Data(bytes: message.pack()))
+    func multicast(message: Message) throws {
+        try channel.multicast(Data(bytes: message.pack()))
     }
 }
 

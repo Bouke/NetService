@@ -30,7 +30,12 @@ class UDPChannel {
         queue.async {
             while true {
                 var buffer = Data(capacity: 1024) //todo: how big's the buffer?
-                let (_, address) = try! self.socket.readDatagram(into: &buffer)
+                let address: Socket.Address?
+                do {
+                    (_, address) = try self.socket.readDatagram(into: &buffer)
+                } catch {
+                    fatalError("Could not read from socket: \(error)")
+                }
                 print("Did read from: \(address)")
                 if let address = address {
                     self.delegate?.channel(self, didReceive: buffer, from: address)
