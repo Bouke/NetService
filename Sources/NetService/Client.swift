@@ -45,7 +45,7 @@ class Client: UDPChannelDelegate {
         do {
             try channels = [
                 UDPChannel(group: ipv4Group, queue: queue),
-                UDPChannel(group: ipv6Group, queue: queue)
+                // UDPChannel(group: ipv6Group, queue: queue),
             ]
         } catch {
             throw Error.channelSetupError(error)
