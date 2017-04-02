@@ -19,6 +19,14 @@ class Client: UDPChannelDelegate {
         return .ipv4(addr)
     }()
     
+    let ipv6Group: Socket.Address = {
+        var addr = sockaddr_in6()
+        addr.sin6_family = sa_family_t(AF_INET)
+        addr.sin6_addr = IPv6("FF02::FB")!.address
+        addr.sin6_port = (5353 as in_port_t).bigEndian
+        return .ipv6(addr)
+    }()
+    
     private static var _shared: Client?
     internal static func shared() throws -> Client {
         if let shared = _shared {
@@ -31,12 +39,18 @@ class Client: UDPChannelDelegate {
     internal var listeners = [Listener]()
     internal var responders = [Responder]()
     let queue = DispatchQueue.global(qos: .userInteractive)
-    let channel: UDPChannel
+    let channels: [UDPChannel]
 
     private init() throws {
-        channel = try UDPChannel(group: ipv4Group, queue: queue)
-        channel = try UDPChannel(group: ipv6Group, queue: queue)
-        channel.delegate = self
+        do {
+            try channels = [
+                UDPChannel(group: ipv4Group, queue: queue),
+                UDPChannel(group: ipv6Group, queue: queue)
+            ]
+        } catch {
+            throw Error.channelSetupError(error)
+        }
+        channels.forEach { $0.delegate = self }
     }
     
     func channel(_ channel: UDPChannel, didReceive data: Data, from source: Socket.Address) {
@@ -97,7 +111,9 @@ class Client: UDPChannelDelegate {
     }
     
     func multicast(message: Message) throws {
-        try channel.multicast(Data(bytes: message.pack()))
+        for channel in channels {
+            try channel.multicast(Data(bytes: message.pack()))
+        }
     }
 }
 
