@@ -36,7 +36,6 @@ class UDPChannel {
                 } catch {
                     fatalError("Could not read from socket: \(error)")
                 }
-                print("Did read from: \(address)")
                 if let address = address {
                     self.delegate?.channel(self, didReceive: buffer, from: address)
                 }

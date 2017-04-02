@@ -42,8 +42,6 @@ class Client: UDPChannelDelegate {
     func channel(_ channel: UDPChannel, didReceive data: Data, from source: Socket.Address) {
         let message = Message(unpack: data)
        
-        print("Received from \(String(describing: source)): \(message)")
-
         if message.header.response {
             for listener in self.listeners {
                 listener.received(message: message)
