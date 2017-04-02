@@ -6,7 +6,7 @@ import Socket
 #endif
 
 protocol UDPChannelDelegate: class {
-    func channel(_ channel: UDPChannel, didReceive: Data, from: Socket.Address?) -> Data?
+    func channel(_ channel: UDPChannel, didReceive: Data, from: Socket.Address)
 }
 
 class UDPChannel {
@@ -31,14 +31,19 @@ class UDPChannel {
             while true {
                 var buffer = Data(capacity: 1024) //todo: how big's the buffer?
                 let (_, address) = try! self.socket.readDatagram(into: &buffer)
-                if let response = self.delegate?.channel(self, didReceive: buffer, from: address) {
-                    try! self.socket.write(from: response, to: group)
+                print("Did read from: \(address)")
+                if let address = address {
+                    self.delegate?.channel(self, didReceive: buffer, from: address)
                 }
             }
         }
     }
     
-    func multicast(_ data: Data) {
-        try! self.socket.write(from: data, to: group)
+    func multicast(_ data: Data) throws {
+        try self.socket.write(from: data, to: group)
+    }
+    
+    func unicast(_ data: Data, to destination: Socket.Address) throws {
+        try self.socket.write(from: data, to: destination)
     }
 }
