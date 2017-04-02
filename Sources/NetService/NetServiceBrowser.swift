@@ -42,7 +42,7 @@ public class NetServiceBrowser: Listener {
         do {
             try client.multicast(message: query)
         } catch {
-            delegate?.netServiceBrowser(self, didNotSearch: [error.localizedDescription: -1])
+            delegate?.netServiceBrowser(self, didNotSearch: [String(describing: error): -1])
         }
     }
 

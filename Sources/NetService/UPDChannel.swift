@@ -10,6 +10,12 @@ protocol UDPChannelDelegate: class {
 }
 
 class UDPChannel {
+    enum Error: Swift.Error {
+        case couldNotCreateSocket(Swift.Error)
+        case couldNotListen(Swift.Error)
+        case couldNotJoin(Swift.Error)
+    }
+    
     let socket: Socket
     let group: Socket.Address
     let queue: DispatchQueue
@@ -19,13 +25,25 @@ class UDPChannel {
         self.group = group
         self.queue = queue
 
-        switch group {
-        case .ipv4: socket = try Socket.create(family: .inet, type: .datagram, proto: .udp)
-        case .ipv6: socket = try Socket.create(family: .inet6, type: .datagram, proto: .udp)
-        default: abort()
+        do {
+            switch group {
+            case .ipv4: socket = try Socket.create(family: .inet, type: .datagram, proto: .udp)
+            case .ipv6: socket = try Socket.create(family: .inet6, type: .datagram, proto: .udp)
+            default: abort()
+            }
+        } catch {
+            throw Error.couldNotCreateSocket(error)
         }
-        try socket.listen(on: Int(group.port))
-        try socket.join(membership: Membership(address: group)!)
+        do {
+            try socket.listen(on: Int(group.port))
+        } catch {
+            throw Error.couldNotListen(error)
+        }
+        do {
+            try socket.join(membership: Membership(address: group)!)
+        } catch {
+            throw Error.couldNotJoin(error)
+        }
         
         queue.async {
             while true {
