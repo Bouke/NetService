@@ -22,8 +22,9 @@ enum Membership {
             self = .ipv4(ip_mreq(imr_multiaddr: sin.sin_addr,
                                  imr_interface: in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))))
         case .ipv6(let sin6):
+            /// @todo the interface number must be 1 on my machine; but what's the correct way to find out?
             self = .ipv6(ipv6_mreq(ipv6mr_multiaddr: sin6.sin6_addr,
-                                   ipv6mr_interface: 0))
+                                   ipv6mr_interface: 1))
         default: return nil
         }
     }
@@ -40,9 +41,9 @@ extension Socket {
             #endif
         case .ipv6(var ipv6_mreq):
             #if os(OSX)
-                try posix(setsockopt(socketfd, IPPROTO_IP, IPV6_JOIN_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+                try posix(setsockopt(socketfd, IPPROTO_IPV6, IPV6_JOIN_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
             #else
-                try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IPV6_JOIN_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+                try posix(setsockopt(socketfd, Int32(IPPROTO_IPV6), Int32(IPV6_JOIN_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
             #endif
         }
     }
@@ -57,9 +58,9 @@ extension Socket {
             #endif
         case .ipv6(var ipv6_mreq):
             #if os(OSX)
-                try posix(setsockopt(socketfd, IPPROTO_IP, IPV6_LEAVE_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+                try posix(setsockopt(socketfd, IPPROTO_IPV6, IPV6_LEAVE_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
             #else
-                try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IPV6_LEAVE_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
+                try posix(setsockopt(socketfd, Int32(IPPROTO_IPV6), Int32(IPV6_LEAVE_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
             #endif
         }
     }
