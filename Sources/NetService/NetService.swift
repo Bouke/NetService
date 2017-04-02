@@ -8,7 +8,7 @@ import DNS
 import Socket
 
 
-let duplicateNameCheckTimeInterval = TimeInterval(2)
+let duplicateNameCheckTimeInterval = TimeInterval(3)
 
 // TODO: check name availability before claiming the service's name
 public class NetService: Responder, Listener {
