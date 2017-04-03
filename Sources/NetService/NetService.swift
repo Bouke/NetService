@@ -30,13 +30,14 @@ public class NetService: Responder, Listener {
 
     // MARK: Creating Network Services
 
-    convenience init(domain: String, type: String, name: String) {
+    public convenience init(domain: String, type: String, name: String) {
         self.init(domain: domain, type: type, name: name, port: -1)
     }
 
     public init(domain: String, type: String, name: String, port: Int32) {
-        assert(domain == "local.", "only local. domain is supported")
-        assert(type.hasSuffix("."), "type label(s) should end with a period")
+        precondition(domain == "local.", "only local. domain is supported")
+        precondition(type.hasSuffix("."), "type label(s) should end with a period")
+        precondition(port >= -1 && port <= 65535, "Port should be in the range 0-65535")
 
         self.domain = domain
         self.type = type
@@ -90,9 +91,10 @@ public class NetService: Responder, Listener {
 
     public func publish(options: Options = []) {
         precondition(publishState == .stopped, "invalid state, should be .stopped")
+        precondition(port >= 0, "port should be >= 0")
 
         do {
-            client = try! Client.shared()
+            client = try Client.shared()
         } catch {
             return publishError(error: error)
         }
