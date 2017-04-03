@@ -126,6 +126,12 @@ class Responder: UDPChannelDelegate {
                 case .host6 where question.name == hostname:
                     answers += host6Records
                     additional += hostRecords
+                case .text:
+                    for service in publishedServices {
+                        if let textRecord = service.textRecord, textRecord.name == question.name {
+                            answers.append(textRecord)
+                        }
+                    }
                 default:
                     break
                 }
