@@ -79,7 +79,11 @@ class Client: UDPChannelDelegate {
                 return
             }
             
-            var response = Message(header: Header(response: true), answers: answers, authorities: authorities, additional: additional)
+            var response = Message(header: Header(response: true),
+                                   questions: message.questions,
+                                   answers: answers,
+                                   authorities: authorities,
+                                   additional: additional)
             
             // The destination UDP port in all Multicast DNS responses MUST be 5353,
             // and the destination address MUST be the mDNS IPv4 link-local
