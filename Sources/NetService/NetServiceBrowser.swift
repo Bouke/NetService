@@ -4,23 +4,23 @@ import Socket
 
 // TODO: track TTL of records
 public class NetServiceBrowser: Listener {
-    var client: Client
+    var responder: Responder
     var services = [String]()
 
     // MARK: Creating Network Service Browsers
 
     public init() {
         do {
-            client = try Client.shared()
+            responder = try Responder.shared()
         } catch {
-            fatalError("Could not get shared UDP Client: \(error)")
+            fatalError("Could not get shared Responder: \(error)")
         }
-        client.listeners.append(self)
+        responder.listeners.append(self)
     }
 
     deinit {
-        if let index = client.listeners.index(where: { $0 === self }) {
-            client.listeners.remove(at: index)
+        if let index = responder.listeners.index(where: { $0 === self }) {
+            responder.listeners.remove(at: index)
         }
     }
 
@@ -40,7 +40,7 @@ public class NetServiceBrowser: Listener {
         currentSearch = (type, domain)
         let query = Message(header: Header(response: false), questions: [Question(name: "\(type).\(domain)", type: .pointer)])
         do {
-            try client.multicast(message: query)
+            try responder.multicast(message: query)
         } catch {
             delegate?.netServiceBrowser(self, didNotSearch: [String(describing: error): -1])
         }

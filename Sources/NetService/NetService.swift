@@ -11,12 +11,12 @@ import Socket
 let duplicateNameCheckTimeInterval = TimeInterval(3)
 
 // TODO: check name availability before claiming the service's name
-public class NetService: Responder, Listener {
+public class NetService: Listener {
     public var domain: String
     public var type: String
     public var name: String
 
-    private var fqdn: String
+    internal var fqdn: String
 
     public struct Options: OptionSet {
         public let rawValue: Int
@@ -67,7 +67,7 @@ public class NetService: Responder, Listener {
     var socket4: Socket?
     var socket6: Socket?
 
-    var client: Client?
+    var responder: Responder?
     var pointerRecord: PointerRecord?
     var serviceRecord: ServiceRecord?
     var hostRecords: [ResourceRecord]?
@@ -94,10 +94,11 @@ public class NetService: Responder, Listener {
         precondition(port >= 0, "port should be >= 0")
 
         do {
-            client = try Client.shared()
+            responder = try Responder.shared()
         } catch {
-            return publishError(error: error)
+            return publishError(error)
         }
+        hostName = responder!.hostname
 
         // TODO: support ipv6
         // TODO: auto rename
@@ -108,11 +109,11 @@ public class NetService: Responder, Listener {
         if !options.contains(.noAutoRename) {
             // check if name is taken -- allow others a few seconds to respond
 
-            client!.listeners.append(self)
+            responder!.listeners.append(self)
             do {
-                try client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+                try responder!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
             } catch {
-                return publishError(error: error)
+                return publishError(error)
             }
             // TODO: remove listener
 
@@ -133,16 +134,16 @@ public class NetService: Responder, Listener {
                 socket6 = try Socket.create(family: .inet6, type: .stream, proto: .tcp)
                 try socket6!.listen(on: self.port)
             } catch {
-                publishError(error: error)
+                publishError(error)
             }
 
             listenQueue!.async { [unowned self] in
                 while true {
                     do {
-                        let clientSocket = try self.socket4!.acceptClientConnection()
-                        self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
+                        let responderSocket = try self.socket4!.acceptClientConnection()
+                        self.delegate?.netService(self, didAcceptConnectionWith: responderSocket)
                     } catch {
-                        self.publishError(error: error)
+                        self.publishError(error)
                         break
                     }
                 }
@@ -150,10 +151,10 @@ public class NetService: Responder, Listener {
             listenQueue!.async { [unowned self] in
                 while true {
                     do {
-                        let clientSocket = try self.socket6!.acceptClientConnection()
-                        self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
+                        let responderSocket = try self.socket6!.acceptClientConnection()
+                        self.delegate?.netService(self, didAcceptConnectionWith: responderSocket)
                     } catch {
-                        self.publishError(error: error)
+                        self.publishError(error)
                         break
                     }
                 }
@@ -166,54 +167,33 @@ public class NetService: Responder, Listener {
     }
 
     func publishPhaseTwo() {
-        if let index = client!.listeners.index(where: {$0 === self }) {
-            client!.listeners.remove(at: index)
-        }
-
-        do {
-            hostName = try gethostname() + "."
-        } catch {
-            return publishError(error: error)
-        }
-        precondition(hostName!.hasSuffix(domain), "host name \(String(describing: hostName)) should have suffix \(domain)")
-
-        // publish mdns
-        pointerRecord = PointerRecord(name: "\(type)\(domain)", ttl: 4500, destination: fqdn)
-
         precondition(port > 0, "Port not configured")
-        serviceRecord = ServiceRecord(name: fqdn, ttl: 120, port: UInt16(port), server: hostName!)
 
-        // TODO: update host records on IP address changes
-        hostRecords = []
-        addresses = getLocalAddresses()
-            .map {
-                var address = $0
-                address.port = UInt16(port)
-                return address
-            }
-
-        hostRecords = addresses!.flatMap { (address) -> ResourceRecord? in
-            switch address {
-            case .ipv4(let sin):
-                return HostRecord<IPv4>(name: hostName!, ttl: 120, ip: IPv4(address: sin.sin_addr))
-            case .ipv6(let sin6):
-                return HostRecord<IPv6>(name: hostName!, ttl: 120, ip: IPv6(address: sin6.sin6_addr))
-            default: abort()
-            }
+        if let index = responder!.listeners.index(where: {$0 === self }) {
+            responder!.listeners.remove(at: index)
         }
         
+        addresses = responder!.addresses.map {
+            var address = $0
+            address.port = UInt16(self.port)
+            return address
+        }
+        pointerRecord = PointerRecord(name: "\(type)\(domain)", ttl: 4500, destination: fqdn)
+        serviceRecord = ServiceRecord(name: fqdn, ttl: 120, port: UInt16(port), server: hostName!)
         textRecord?.name = fqdn
-
-        // prepare for questions
-        client!.responders.append(self)
-
+        
         // broadcast availability
-        broadcastService()
+        do {
+            try responder!.publish(self)
+        } catch {
+            return publishError(error)
+        }
+        
         publishState = .published
         delegate?.netServiceDidPublish(self)
     }
 
-    func publishError(error: Error) {
+    func publishError(_ error: Error) {
         if case .lookingForDuplicates(let (_, timer)) = publishState {
             timer.invalidate()
         }
@@ -229,45 +209,6 @@ public class NetService: Responder, Listener {
 
     }
 
-    func broadcastService() {
-        do {
-            try client!.multicast(message: Message(header: Header(response: true), answers: [pointerRecord!], additional: [serviceRecord!] + hostRecords!))
-        } catch {
-            return publishError(error: error)
-        }
-    }
-
-    func respond(toMessage message: Message) -> (answers: [ResourceRecord], authorities: [ResourceRecord], additional: [ResourceRecord])? {
-        var answers = [ResourceRecord]()
-        var additional = [ResourceRecord]()
-        
-        for question in message.questions {
-            switch question.type {
-            case .pointer where question.name == pointerRecord?.name:
-                answers.append(pointerRecord!)
-                additional.append(serviceRecord!)
-                additional.append(contentsOf: hostRecords!)
-            case .service where question.name == serviceRecord?.name:
-                answers.append(serviceRecord!)
-                additional.append(contentsOf: hostRecords!)
-            case .host:
-                // TODO: only return ipv4 addresses
-                answers.append(contentsOf: hostRecords!.filter({ $0.name == question.name }))
-            case .host6:
-                // TODO: only return ipv6 addresses
-                answers.append(contentsOf: hostRecords!.filter({ $0.name == question.name }))
-            case .text where question.name == textRecord?.name:
-                if let textRecord = textRecord {
-                    answers.append(textRecord)
-                } else {
-                    abort()
-                }
-            default: break
-            }
-        }
-        return (answers, [], additional)
-    }
-
     func received(message: Message) {
         guard case .lookingForDuplicates(let (number, timer)) = publishState else { return }
 
@@ -276,9 +217,9 @@ public class NetService: Responder, Listener {
 
             fqdn = "\(name) (\(number + 1)).\(type)\(domain)"
             do {
-                try client!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+                try responder!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
             } catch {
-                return publishError(error: error)
+                return publishError(error)
             }
             let timer = Timer._scheduledTimer(withTimeInterval: duplicateNameCheckTimeInterval, repeats: false, block: {_ in
                 self.name = "\(self.name) (\(number + 1))"
@@ -296,23 +237,14 @@ public class NetService: Responder, Listener {
 
     public func stop() {
         precondition(publishState == .published)
-        preconditionFailure("Not implemented")
-
-        pointerRecord!.ttl = 0
-        serviceRecord!.ttl = 0
-        broadcastService()
-
-        if let index = client!.responders.index(where: {$0 === self }) {
-            client!.responders.remove(at: index)
-        }
-
+        try! responder!.unpublish(self)
         publishState = .stopped
         delegate?.netServiceDidStop(self)
     }
 
     // MARK: Obtaining the DNS Hostname
 
-    public var hostName: String?
+    public internal(set) var hostName: String?
 }
 
 extension NetService: CustomDebugStringConvertible {
