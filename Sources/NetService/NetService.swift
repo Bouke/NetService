@@ -125,24 +125,37 @@ public class NetService: Responder, Listener {
 
             listenQueue = DispatchQueue.global(qos: .userInteractive)
 
-            socket4 = try! Socket.create(family: .inet, type: .stream, proto: .tcp)
-            try! socket4!.listen(on: self.port)
-            self.port = Int(socket4!.signature!.port)
+            do {
+                socket4 = try Socket.create(family: .inet, type: .stream, proto: .tcp)
+                try socket4!.listen(on: self.port)
+                self.port = Int(socket4!.signature!.port)
 
-            listenQueue!.async { [unowned self] in
-                while true {
-                    let clientSocket = try! self.socket4!.acceptClientConnection()
-                    self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
-                }
+                socket6 = try Socket.create(family: .inet6, type: .stream, proto: .tcp)
+                try socket6!.listen(on: self.port)
+            } catch {
+                publishError(error: error)
             }
 
-            socket6 = try! Socket.create(family: .inet6, type: .stream, proto: .tcp)
-            try! socket6!.listen(on: self.port)
-
             listenQueue!.async { [unowned self] in
                 while true {
-                    let clientSocket = try! self.socket6!.acceptClientConnection()
-                    self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
+                    do {
+                        let clientSocket = try self.socket4!.acceptClientConnection()
+                        self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
+                    } catch {
+                        self.publishError(error: error)
+                        break
+                    }
+                }
+            }
+            listenQueue!.async { [unowned self] in
+                while true {
+                    do {
+                        let clientSocket = try self.socket6!.acceptClientConnection()
+                        self.delegate?.netService(self, didAcceptConnectionWith: clientSocket)
+                    } catch {
+                        self.publishError(error: error)
+                        break
+                    }
                 }
             }
         }
