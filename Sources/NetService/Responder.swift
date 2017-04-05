@@ -97,7 +97,6 @@ class Responder: UDPChannelDelegate {
             return
         } else {
             var answers = [ResourceRecord]()
-            var authorities = [ResourceRecord]()
             var additional = [ResourceRecord]()
             
             for question in message.questions {
@@ -149,9 +148,7 @@ class Responder: UDPChannelDelegate {
             var response = Message(header: Header(response: true),
                                    questions: message.questions,
                                    answers: answers,
-                                   authorities: authorities,
                                    additional: additional)
-
             // The destination UDP port in all Multicast DNS responses MUST be 5353,
             // and the destination address MUST be the mDNS IPv4 link-local
             // multicast address 224.0.0.251 or its IPv6 equivalent FF02::FB, except
