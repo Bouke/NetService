@@ -198,15 +198,7 @@ public class NetService: Listener {
             timer.invalidate()
         }
         publishState = .didNotPublish(error)
-        switch error {
-        case let error as NSError:
-            delegate?.netService(self, didNotPublish: [error.description: NSNumber(integerLiteral: error.code)])
-        case let error as POSIXError:
-            delegate?.netService(self, didNotPublish: ["\(error.code.rawValue)": NSNumber(integerLiteral: Int(error.code.rawValue))])
-        default:
-            delegate?.netService(self, didNotPublish: [String(describing: error): -1])
-        }
-
+        delegate?.netService(self, didNotPublish: error)
     }
 
     func received(message: Message) {
@@ -236,8 +228,16 @@ public class NetService: Listener {
     public internal(set) var port: Int = -1
 
     public func stop() {
-        precondition(publishState == .published)
-        try! responder!.unpublish(self)
+        switch publishState {
+        case .stopped:
+            break
+        case .lookingForDuplicates(let (_, timer)):
+            timer.invalidate()
+        case .published:
+            try! responder!.unpublish(self)
+        case .didNotPublish:
+            break
+        }
         publishState = .stopped
         delegate?.netServiceDidStop(self)
     }
@@ -263,7 +263,7 @@ public protocol NetServiceDelegate: class {
     func netServiceDidPublish(_ sender: NetService)
 
     func netService(_ sender: NetService,
-                    didNotPublish errorDict: [String : NSNumber])
+                    didNotPublish error: Error)
 
     func netServiceDidStop(_ sender: NetService)
 

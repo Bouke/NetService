@@ -42,7 +42,7 @@ public class NetServiceBrowser: Listener {
         do {
             try responder.multicast(message: query)
         } catch {
-            delegate?.netServiceBrowser(self, didNotSearch: [String(describing: error): -1])
+            delegate?.netServiceBrowser(self, didNotSearch: error)
         }
     }
 
@@ -96,7 +96,7 @@ public protocol NetServiceBrowserDelegate: class {
     func netServiceBrowserWillSearch(_ browser: NetServiceBrowser)
 
     func netServiceBrowser(_ browser: NetServiceBrowser,
-                           didNotSearch errorDict: [String : NSNumber])
+                           didNotSearch error: Error)
 
     func netServiceBrowser(_ browser: NetServiceBrowser,
                            didFind service: NetService,
