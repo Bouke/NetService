@@ -6,7 +6,7 @@ let package = Package(
         Target(name: "NetService", dependencies: ["Cifaddrs"])
     ],
     dependencies: [
-        .Package(url: "https://github.com/Bouke/DNS.git", majorVersion: 0, minor: 2),
+        .Package(url: "https://github.com/Bouke/DNS.git", majorVersion: 0, minor: 3),
         .Package(url: "https://github.com/IBM-Swift/BlueSocket.git", majorVersion: 0, minor: 12)
     ]
 )
