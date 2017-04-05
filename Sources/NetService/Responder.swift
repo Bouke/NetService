@@ -88,7 +88,7 @@ class Responder: UDPChannelDelegate {
         do {
             message = try Message(unpack: data)
         } catch {
-            return NSLog("Could not unpack message")
+            return NSLog("Could not unpack message (hex encoded): \(data.hex).")
         }
         if message.header.response {
             for listener in self.listeners {
