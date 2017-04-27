@@ -1,7 +1,7 @@
 xcodebuild_arguments:
   - -scheme
   - NetService
-module: DNS
+module: NetService
 author: Bouke Haarsma
 author_url: https://twitter.com/BoukeHaarsma
 output: ../NetService-Docs/master
