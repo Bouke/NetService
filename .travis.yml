@@ -9,3 +9,5 @@ matrix:
       osx_image: xcode8.3
     - os: linux
       dist: trusty
+      before_install:
+        - sudo hostname travis-ci.local
