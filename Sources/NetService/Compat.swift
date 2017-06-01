@@ -1,6 +1,6 @@
 import Foundation
 
-#if os(OSX)
+#if os(macOS)
     // needed on OS X 10.11 El Capitan
     @objc
     class TimerTarget: NSObject {

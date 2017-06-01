@@ -1,4 +1,4 @@
-#if os(OSX)
+#if os(macOS)
     import Darwin
 #else
     import Glibc

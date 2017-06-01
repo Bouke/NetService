@@ -1,4 +1,4 @@
-#if os(OSX)
+#if os(macOS)
     import Darwin
 #else
     import Glibc
@@ -34,13 +34,13 @@ extension Socket {
     func join(membership: Membership) throws {
         switch membership {
         case .ipv4(var ip_mreq):
-            #if os(OSX)
+            #if os(macOS)
                 try posix(setsockopt(socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
             #else
                 try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IP_ADD_MEMBERSHIP), &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
             #endif
         case .ipv6(var ipv6_mreq):
-            #if os(OSX)
+            #if os(macOS)
                 try posix(setsockopt(socketfd, IPPROTO_IPV6, IPV6_JOIN_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
             #else
                 try posix(setsockopt(socketfd, Int32(IPPROTO_IPV6), Int32(IPV6_JOIN_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
@@ -51,13 +51,13 @@ extension Socket {
     func leave(membership: Membership) throws {
         switch membership {
         case .ipv4(var ip_mreq):
-            #if os(OSX)
+            #if os(macOS)
                 try posix(setsockopt(socketfd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
             #else
                 try posix(setsockopt(socketfd, Int32(IPPROTO_IP), Int32(IP_DROP_MEMBERSHIP), &ip_mreq, socklen_t(MemoryLayout<ip_mreq>.size)))
             #endif
         case .ipv6(var ipv6_mreq):
-            #if os(OSX)
+            #if os(macOS)
                 try posix(setsockopt(socketfd, IPPROTO_IPV6, IPV6_LEAVE_GROUP, &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
             #else
                 try posix(setsockopt(socketfd, Int32(IPPROTO_IPV6), Int32(IPV6_LEAVE_GROUP), &ipv6_mreq, socklen_t(MemoryLayout<ipv6_mreq>.size)))
