@@ -123,16 +123,17 @@ extension Socket.Address: CustomStringConvertible {
     }
 
     var presentation: String {
-        var buffer = Data(count: Int(INET6_ADDRSTRLEN))
         switch self {
         case .ipv4(var sin):
+            var buffer = Data(count: Int(INET_ADDRSTRLEN))
             let ptr = buffer.withUnsafeMutableBytes {
-                inet_ntop(AF_INET, &sin.sin_addr, $0, socklen_t(buffer.count))
+                inet_ntop(AF_INET, &sin.sin_addr, $0, socklen_t(INET_ADDRSTRLEN))
             }
             return String(cString: ptr!)
         case .ipv6(var sin6):
+            var buffer = Data(count: Int(INET6_ADDRSTRLEN))
             let ptr = buffer.withUnsafeMutableBytes {
-                inet_ntop(AF_INET6, &sin6.sin6_addr, $0, socklen_t(buffer.count))
+                inet_ntop(AF_INET6, &sin6.sin6_addr, $0, socklen_t(INET6_ADDRSTRLEN))
             }
             return String(cString: ptr!)
         default: abort()

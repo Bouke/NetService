@@ -199,7 +199,7 @@ public class NetService: Listener {
 
             responder!.listeners.append(self)
             do {
-                try responder!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+                try responder!.multicast(message: Message(type: .query, questions: [Question(name: fqdn, type: .service)]))
             } catch {
                 return publishError(error)
             }
@@ -292,12 +292,12 @@ public class NetService: Listener {
     func received(message: Message) {
         guard case .lookingForDuplicates(let (number, timer)) = publishState else { return }
 
-        if message.answers.flatMap({ $0 as? ServiceRecord }).contains(where: { $0.name == fqdn }) {
+      if message.answers.compactMap({ $0 as? ServiceRecord }).contains(where: { $0.name == fqdn }) {
             timer.invalidate()
 
             fqdn = "\(name) (\(number + 1)).\(type)\(domain)"
             do {
-                try responder!.multicast(message: Message(header: Header(response: false), questions: [Question(name: fqdn, type: .service)]))
+                try responder!.multicast(message: Message(type: .query, questions: [Question(name: fqdn, type: .service)]))
             } catch {
                 return publishError(error)
             }

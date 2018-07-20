@@ -78,7 +78,7 @@ public class NetServiceBrowser: Listener {
         delegate?.netServiceBrowserWillSearch(self)
 
         currentSearch = (type, domain)
-        let query = Message(header: Header(response: false), questions: [Question(name: "\(type).\(domain)", type: .pointer)])
+        let query = Message(type: .query, questions: [Question(name: "\(type).\(domain)", type: .pointer)])
         do {
             try responder.multicast(message: query)
         } catch {
@@ -100,13 +100,13 @@ public class NetServiceBrowser: Listener {
         }
 
         let newPointers = message.answers
-            .flatMap { $0 as? PointerRecord }
+          .compactMap { $0 as? PointerRecord }
             .filter { !self.services.contains($0.destination) }
             .filter { $0.name == "\(type)\(domain)" }
 
         for pointer in newPointers {
             let service = NetService(domain: domain, type: type, name: pointer.destination.replacingOccurrences(of: ".\(type)\(domain)", with: ""))
-            guard let serviceRecord = message.additional.flatMap({ $0 as? ServiceRecord }).first(where: { $0.name == pointer.destination }) else {
+          guard let serviceRecord = message.additional.compactMap({ $0 as? ServiceRecord }).first(where: { $0.name == pointer.destination }) else {
                 continue
             }
 
@@ -114,7 +114,7 @@ public class NetServiceBrowser: Listener {
             service.hostName = serviceRecord.server
 
             service.addresses = message.additional
-                .flatMap { $0 as? HostRecord<IPv4> }
+              .compactMap { $0 as? HostRecord<IPv4> }
                 .filter { $0.name == serviceRecord.server }
                 .map { hostRecord in
                     var sin = sockaddr_in()
@@ -124,7 +124,7 @@ public class NetServiceBrowser: Listener {
                     return Socket.Address.ipv4(sin)
                 }
             service.addresses! += message.additional
-                .flatMap { $0 as? HostRecord<IPv6> }
+              .compactMap { $0 as? HostRecord<IPv6> }
                 .filter { $0.name == serviceRecord.server }
                 .map { hostRecord in
                     var sin6 = sockaddr_in6()

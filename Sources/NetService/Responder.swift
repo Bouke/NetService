@@ -64,7 +64,7 @@ class Responder: UDPChannelDelegate {
 
         addresses = getLocalAddresses()
 
-        hostRecords = addresses.flatMap { (address) -> HostRecord<IPv4>? in
+      hostRecords = addresses.compactMap { (address) -> HostRecord<IPv4>? in
             switch address {
             case .ipv4(let sin):
                 return HostRecord<IPv4>(name: hostname, ttl: 120, ip: IPv4(address: sin.sin_addr))
@@ -72,7 +72,7 @@ class Responder: UDPChannelDelegate {
                 return nil
             }
         }
-        host6Records = addresses.flatMap { (address) -> HostRecord<IPv6>? in
+      host6Records = addresses.compactMap { (address) -> HostRecord<IPv6>? in
             switch address {
             case .ipv6(let sin6):
                 return HostRecord<IPv6>(name: hostname, ttl: 120, ip: IPv6(address: sin6.sin6_addr))
@@ -86,11 +86,11 @@ class Responder: UDPChannelDelegate {
     func channel(_ channel: UDPChannel, didReceive data: Data, from source: Socket.Address) {
         let message: Message
         do {
-            message = try Message(unpack: data)
+            message = try Message(deserialize: data)
         } catch {
             return NSLog("Could not unpack message (hex encoded): \(data.hex).")
         }
-        if message.header.response {
+        if message.type == .response {
             for listener in self.listeners {
                 listener.received(message: message)
             }
@@ -145,7 +145,7 @@ class Responder: UDPChannelDelegate {
                 return
             }
             
-            var response = Message(header: Header(response: true),
+            var response = Message(type: .response,
                                    questions: message.questions,
                                    answers: answers,
                                    additional: additional)
@@ -162,7 +162,7 @@ class Responder: UDPChannelDelegate {
             /// @todo: implement this logic
             do {
                 if source.port == 5353 {
-                    try channel.multicast(response.pack())
+                    try channel.multicast(response.serialize())
                 } else {
                     // In this case, the Multicast DNS responder MUST send a UDP response
                     // directly back to the querier, via unicast, to the query packet's
@@ -172,9 +172,9 @@ class Responder: UDPChannelDelegate {
                     // question given in the query message.  In addition, the cache-flush
                     // bit described in Section 10.2, "Announcements to Flush Outdated Cache
                     // Entries", MUST NOT be set in legacy unicast responses.
-                    response.header.id = message.header.id
+                    response.id = message.id
                     
-                    try channel.unicast(response.pack(), to: source)
+                    try channel.unicast(response.serialize(), to: source)
                 }
             } catch {
                 NSLog("Error while replying to \(message) with response \(response): \(error)")
@@ -187,7 +187,7 @@ class Responder: UDPChannelDelegate {
             throw Error.missingResourceRecords
         }
         publishedServices.append(service)
-        var message = Message(header: Header(response: true),
+        var message = Message(type: .response,
                               answers: [pointerRecord, serviceRecord],
                               additional: hostRecords)
         if let textRecord = service.textRecord {
@@ -204,7 +204,7 @@ class Responder: UDPChannelDelegate {
             publishedServices.remove(at: index)
             pointerRecord.ttl = 0
             serviceRecord.ttl = 0
-            var message = Message(header: Header(response: true),
+            var message = Message(type: .response,
                                   answers: [pointerRecord, serviceRecord])
             if var textRecord = service.textRecord {
                 textRecord.ttl = 0
@@ -216,7 +216,7 @@ class Responder: UDPChannelDelegate {
 
     func multicast(message: Message) throws {
         for channel in channels {
-            try channel.multicast(message.pack())
+            try channel.multicast(message.serialize())
         }
     }
 }

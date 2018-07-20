@@ -6,7 +6,7 @@ func htonl(_ value: UInt32) -> UInt32 {
 }
 let ntohl = htonl
 
-extension Integer {
+extension BinaryInteger {
     init(bytes: [UInt8]) {
         precondition(bytes.count == MemoryLayout<Self>.size, "incorrect number of bytes")
         self = bytes.reversed().withUnsafeBufferPointer() {
