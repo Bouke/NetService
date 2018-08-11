@@ -9,7 +9,7 @@ let package = Package(
     .library(name: "NetService", targets: ["NetService"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/Bouke/DNS.git", .branch("master")),
+    .package(url: "https://github.com/Bouke/DNS.git", from: "1.1.0"),
     .package(url: "https://github.com/IBM-Swift/BlueSocket.git", from: "1.0.0"),
   ],
   targets: [

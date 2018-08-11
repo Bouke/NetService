@@ -100,7 +100,7 @@ public class NetServiceBrowser: Listener {
         }
 
         let newPointers = message.answers
-          .compactMap { $0 as? PointerRecord }
+            .compactMap { $0 as? PointerRecord }
             .filter { !self.services.contains($0.destination) }
             .filter { $0.name == "\(type)\(domain)" }
 
@@ -114,7 +114,7 @@ public class NetServiceBrowser: Listener {
             service.hostName = serviceRecord.server
 
             service.addresses = message.additional
-              .compactMap { $0 as? HostRecord<IPv4> }
+                .compactMap { $0 as? HostRecord<IPv4> }
                 .filter { $0.name == serviceRecord.server }
                 .map { hostRecord in
                     var sin = sockaddr_in()
@@ -124,7 +124,7 @@ public class NetServiceBrowser: Listener {
                     return Socket.Address.ipv4(sin)
                 }
             service.addresses! += message.additional
-              .compactMap { $0 as? HostRecord<IPv6> }
+                .compactMap { $0 as? HostRecord<IPv6> }
                 .filter { $0.name == serviceRecord.server }
                 .map { hostRecord in
                     var sin6 = sockaddr_in6()

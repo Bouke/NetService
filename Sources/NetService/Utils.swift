@@ -183,5 +183,5 @@ func gethostname() throws -> String {
 func getLocalAddresses() -> [Socket.Address] {
     return getifaddrs()
         .filter { Int($0.pointee.ifa_flags) & Int(IFF_LOOPBACK) == 0 }
-      .compactMap { Socket.Address($0.pointee.ifa_addr) }
+        .compactMap { Socket.Address($0.pointee.ifa_addr) }
 }
