@@ -9,11 +9,9 @@ import Cifaddrs
 import DNS
 import Socket
 
-
 let duplicateNameCheckTimeInterval = TimeInterval(3)
 
 // TODO: check name availability before claiming the service's name
-
 
 /// The `NetService` class represents a network service, either one your application publishes or is a client of. This class and the `NetServiceBrowser` class use multicast DNS to convey information about network services to and from your application. The API of `NetService` provides a convenient way to publish the services offered by your application <s>and to resolve the socket address for a service</s>.
 ///
@@ -27,19 +25,19 @@ let duplicateNameCheckTimeInterval = TimeInterval(3)
 ///
 /// The methods of `NetService` operate asynchronously so your application is not impacted by the speed of the network. All information about a service is returned to your application through the `NetService` object’s delegate. You must provide a delegate object to respond to messages and to handle errors appropriately.
 public class NetService: Listener {
-    
+
     internal var fqdn: String
 
     /// These constants specify options for a network service.
     public struct Options: OptionSet {
         public let rawValue: Int
-        public init(rawValue:Int) {
+        public init(rawValue: Int) {
             self.rawValue = rawValue
         }
 
         /// Specifies that the network service should not rename itself in the event of a name collision.
         public static let noAutoRename = Options(rawValue: 1)
-        
+
         /// Specifies that a TCP listener should be started for both IPv4 and IPv6 on the port specified by this service. If the listening port can't be opened, the service calls its delegate’s `netService(_:didNotPublish:)` method to report the error.
         ///
         /// The listener supports only TCP connections. <s>If the service’s type does not end with _tcp, publication fails with badArgumentError.</s>
@@ -50,7 +48,6 @@ public class NetService: Listener {
 
     // MARK: Creating Network Services
 
-    
     /// Returns the receiver, initialized as a network service of a given `type` and sets the initial host information.
     ///
     /// <s>This method is the appropriate initializer to use to resolve a service—to publish a service, use `init(domain:type:name:port:)`.
@@ -70,7 +67,6 @@ public class NetService: Listener {
         self.init(domain: domain, type: type, name: name, port: -1)
     }
 
-    
     /// Initializes the receiver for publishing a network service of type `type` at the socket location specified by `domain`, `name`, and `port`.
     ///
     ///
@@ -104,7 +100,7 @@ public class NetService: Listener {
     }
 
     // MARK: Configuring Network Services
-    
+
     /// A read-only array containing `Socket.Address` objects, each of which contains a socket address for the service.
     ///
     /// An array containing `Socket.Address` objects, each of which contains a socket address for the service. <s>Each `Socket.Address` object in the returned array contains an appropriate sockaddr structure that you can use to connect to the socket. The exact type of this structure depends on the service to which you are connecting.</s> If no addresses were resolved for the service, the returned array contains zero elements.
@@ -118,17 +114,17 @@ public class NetService: Listener {
     ///
     /// This property’s value is set when the object is first initialized, whether by your code or by a browser object. See `init(domain:type:name:)` for more information.
     public var domain: String
-    
+
     /// A string containing the name of this service.
     ///
     /// This value is set when the object is first initialized, whether by your code or by a browser object. See `init(domain:type:name:)` for more information.
     public var name: String
-    
+
     /// The type of the published service.
     ///
     /// This value is set when the object is first initialized, whether by your code or by a browser object. See `init(domain:type:name:)` for more information.
     public var type: String
-    
+
     /// Sets the TXT record for the receiver, and returns a Boolean value that indicates whether the operation was successful.
     ///
     /// NOTE: Differs from Cocoa implementation (uses Data instead)
@@ -140,7 +136,7 @@ public class NetService: Listener {
         textRecord = TextRecord(name: fqdn, ttl: 120, attributes: recordData)
         return true
     }
-    
+
     /// The delegate for the receiver.
     ///
     /// The delegate must conform to the `NetServiceDelegate` protocol, and is not retained.
@@ -166,7 +162,7 @@ public class NetService: Listener {
         static func == (lhs: PublishState, rhs: PublishState) -> Bool {
             switch (lhs, rhs) {
             case (.stopped, .stopped), (.published, .published): return true
-            case (.lookingForDuplicates(_), .lookingForDuplicates(_)): return true
+            case (.lookingForDuplicates, .lookingForDuplicates): return true
             default: return false
             }
         }
@@ -260,7 +256,7 @@ public class NetService: Listener {
         if let index = responder!.listeners.index(where: {$0 === self }) {
             responder!.listeners.remove(at: index)
         }
-        
+
         addresses = responder!.addresses.map {
             var address = $0
             address.port = UInt16(self.port)
@@ -269,14 +265,14 @@ public class NetService: Listener {
         pointerRecord = PointerRecord(name: "\(type)\(domain)", ttl: 4500, destination: fqdn)
         serviceRecord = ServiceRecord(name: fqdn, ttl: 120, port: UInt16(port), server: hostName!)
         textRecord?.name = fqdn
-        
+
         // broadcast availability
         do {
             try responder!.publish(self)
         } catch {
             return publishError(error)
         }
-        
+
         publishState = .published
         delegate?.netServiceDidPublish(self)
     }
@@ -309,7 +305,6 @@ public class NetService: Listener {
         }
     }
 
-    
     /// NOT IMPLEMENTED. <s>Starts a resolve process of a finite duration for the service.
     ///
     /// During the resolve period, the service sends `netServiceDidResolveAddress(_:)` to the delegate for each address it discovers that matches the service parameters. Once the timeout is hit, the service sends `netServiceDidStop(_:)` to the delegate. If no addresses resolve during the timeout period, the service sends `netService(_:didNotResolve:)` to the delegate.</s>
@@ -332,7 +327,7 @@ public class NetService: Listener {
     func startMonitoring() {
         preconditionFailure("Not implemented")
     }
-    
+
     /// Halts a currently running attempt to publish or resolve a service.
     ///
     /// The delegate will receive `netServiceDidStop(_:)` after the service stops.
@@ -351,12 +346,11 @@ public class NetService: Listener {
         publishState = .stopped
         delegate?.netServiceDidStop(self)
     }
-    
+
     /// NOT IMPLEMENTED. <s>Stops the monitoring of TXT-record updates for the receiver.</s>
     func stopMonitoring() {
         preconditionFailure("Not implemented")
     }
-
 
     // MARK: Obtaining the DNS Hostname
 
@@ -371,7 +365,6 @@ extension NetService: CustomDebugStringConvertible {
         return "NetService(domain: \(domain), type: \(type), name: \(name), port: \(port), hostName: \(String(describing: hostName))), addresses: \(String(describing: addresses)))"
     }
 }
-
 
 /// The `NetServiceDelegate` protocol defines the optional methods implemented by delegates of `NetService` objects.
 public protocol NetServiceDelegate: class {
@@ -415,7 +408,7 @@ public protocol NetServiceDelegate: class {
     ///   - sender: The service that did not resolve.
     ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys errorCode and errorDomain.</s>
 //    func netService(_ sender: NetService, didNotResolve error: Error)
-    
+
     /// Informs the delegate that the address for a given service was resolved.
     ///
     /// The delegate can use the `addresses` method to retrieve the service’s address. If the delegate needs only one address, it can stop the resolution process using `stop()`. Otherwise, the resolution will continue until the timeout specified in `resolve(withTimeout:)` is reached.
@@ -429,7 +422,7 @@ public protocol NetServiceDelegate: class {
     ///   - sender: The service whose TXT record was updated.
     ///   - data: The new TXT record.
 //    func netService(_ sender: NetService, didUpdateTXTRecord data: Data)
-    
+
     /// Informs the delegate that a publish() or resolve(withTimeout:) request was stopped.
     ///
     /// - Parameter sender: The service that stopped.

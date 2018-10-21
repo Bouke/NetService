@@ -6,7 +6,6 @@ import Socket
 
 // TODO: track TTL of records
 
-
 /// The NSNetServiceBrowser class defines an interface for finding published services on a network using multicast DNS. An instance of NSNetServiceBrowser is known as a network service browser.
 /// 
 /// Services can range from standard services, such as HTTP and FTP, to custom services defined by other applications. You can use a network service browser in your code to obtain the list of accessible domains and then to obtain an `NetService` object for each discovered service. Each network service browser performs one search at a time, so if you want to perform multiple simultaneous searches, use multiple network service browsers.
@@ -47,7 +46,6 @@ public class NetServiceBrowser: Listener {
 
     var currentSearch: (type: String, domain: String)?
 
-    
     /// Starts a search for services of a particular type within a specific domain.
     ///
     /// - Parameters:
@@ -140,7 +138,6 @@ public class NetServiceBrowser: Listener {
     }
 }
 
-
 /// The `NetServiceBrowserDelegate` protocol defines the optional methods implemented by delegates of `NetServiceBrowser` objects.
 public protocol NetServiceBrowserDelegate: class {
     /// Tells the delegate the sender found a domain.
@@ -154,8 +151,7 @@ public protocol NetServiceBrowserDelegate: class {
 //    func netServiceBrowser(_ browser: NetServiceBrowser,
 //                           didFindDomain domainString: String,
 //                           moreComing: Bool)
-    
-    
+
     /// Tells the delegate the a domain has disappeared or has become unavailable.
     ///
     /// The delegate uses this message to compile a list of unavailable domains. It should wait until `moreComing` is `false` to do a bulk update of user interface elements.
@@ -167,7 +163,7 @@ public protocol NetServiceBrowserDelegate: class {
 //    func netServiceBrowser(_ browser: NetServiceBrowser,
 //                           didRemoveDomain domainString: String,
 //                           moreComing: Bool)
-    
+
     /// Tells the delegate the sender found a service.
     ///
     /// #### Discussion
@@ -183,7 +179,7 @@ public protocol NetServiceBrowserDelegate: class {
     func netServiceBrowser(_ browser: NetServiceBrowser,
                            didFind service: NetService,
                            moreComing: Bool)
-    
+
     /// Tells the delegate a service has disappeared or has become unavailable.
     ///
     /// The delegate uses this message to compile a list of unavailable services. It should wait until `moreComing` is `false` to do a bulk update of user interface elements.
@@ -195,7 +191,7 @@ public protocol NetServiceBrowserDelegate: class {
     func netServiceBrowser(_ browser: NetServiceBrowser,
                            didRemove service: NetService,
                            moreComing: Bool)
-    
+
     /// Tells the delegate that a search is commencing.
     ///
     /// This message is sent to the delegate only if the underlying network layer is ready to begin a search. The delegate can use this notification to prepare its data structures to receive data.
@@ -203,7 +199,6 @@ public protocol NetServiceBrowserDelegate: class {
     /// - Parameter browser: Sender of this delegate message.
     func netServiceBrowserWillSearch(_ browser: NetServiceBrowser)
 
-    
     /// Tells the delegate that a search was not successful.
     ///
     /// - Parameters:
@@ -219,4 +214,3 @@ public protocol NetServiceBrowserDelegate: class {
     /// - Parameter browser: Sender of this delegate message.
     func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser)
 }
-

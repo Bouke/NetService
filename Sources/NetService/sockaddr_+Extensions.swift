@@ -38,7 +38,6 @@ extension SockAddr {
         }
     }
 
-
     /// Calls a closure with an address parameter of a user-specified type.
     ///
     /// This makes it easy to access the fields of an address as the appropriate type.  For example:
@@ -91,7 +90,7 @@ extension sockaddr: SockAddr {
         default: fatalError("No length defined for family \(sa_family)")
         }
     }
-    
+
     var port: UInt16 {
         mutating get {
             switch sa_family {
@@ -114,7 +113,7 @@ extension sockaddr_in: SockAddr {
     var length: socklen_t {
         return socklen_t(MemoryLayout<sockaddr_in>.size)
     }
-    
+
     var port: UInt16 {
         return sin_port.bigEndian
     }

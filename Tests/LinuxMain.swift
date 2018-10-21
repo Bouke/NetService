@@ -2,5 +2,5 @@
 import XCTest
 
 XCTMain([
-   testCase(BrowserTests.allTests),
+   testCase(BrowserTests.allTests)
 ])

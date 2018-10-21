@@ -10,7 +10,7 @@ import Socket
 enum Membership {
     case ipv4(ip_mreq)
     case ipv6(ipv6_mreq)
-    
+
     init(address: in_addr) {
         self = .ipv4(ip_mreq(imr_multiaddr: address,
                              imr_interface: in_addr(s_addr: UInt32(bigEndian: INADDR_ANY))))
@@ -139,12 +139,12 @@ extension Socket.Address: CustomStringConvertible {
         default: abort()
         }
     }
-    
+
     public var description: String {
         switch self {
-        case .ipv4(_):
+        case .ipv4:
             return "\(presentation):\(port)"
-        case .ipv6(_):
+        case .ipv6:
             return "[\(presentation)]:\(port)"
         default: abort()
         }

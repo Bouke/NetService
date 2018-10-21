@@ -1,0 +1,11 @@
+disabled_rules:
+  - cyclomatic_complexity
+  - file_length
+  - force_try
+  - function_body_length
+  - identifier_name
+  - line_length
+  - todo
+included:
+  - Sources
+  - Tests

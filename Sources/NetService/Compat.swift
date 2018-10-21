@@ -42,7 +42,7 @@ import Foundation
         }
     }
 
-    struct CFRunLoopMode : RawRepresentable {
+    struct CFRunLoopMode: RawRepresentable {
         var rawValue: CFString
 
         init(rawValue: CFString) {

@@ -5,13 +5,12 @@ import Socket
     import Dispatch
 #endif
 
-
 class Responder: UDPChannelDelegate {
     enum Error: Swift.Error {
         case channelSetupError(Swift.Error)
         case missingResourceRecords
     }
-    
+
     let ipv4Group: Socket.Address = {
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
@@ -19,7 +18,7 @@ class Responder: UDPChannelDelegate {
         addr.sin_port = (5353 as in_port_t).bigEndian
         return .ipv4(addr)
     }()
-    
+
     let ipv6Group: Socket.Address = {
         var addr = sockaddr_in6()
         addr.sin6_family = sa_family_t(AF_INET)
@@ -27,7 +26,7 @@ class Responder: UDPChannelDelegate {
         addr.sin6_port = (5353 as in_port_t).bigEndian
         return .ipv6(addr)
     }()
-    
+
     private static var _shared: Responder?
     internal static func shared() throws -> Responder {
         if let shared = _shared {
@@ -41,23 +40,23 @@ class Responder: UDPChannelDelegate {
     let queue = DispatchQueue.global(qos: .userInteractive)
     let channels: [UDPChannel]
     public private(set) var publishedServices: [NetService] = []
-    
+
     // TODO: update host records on IP address changes
     let hostname: String
     let addresses: [Socket.Address]
     let hostRecords: [ResourceRecord]
     let host6Records: [ResourceRecord]
-    
+
     private init() throws {
         do {
             try channels = [
-                UDPChannel(group: ipv4Group, queue: queue),
+                UDPChannel(group: ipv4Group, queue: queue)
                 // UDPChannel(group: ipv6Group, queue: queue),
             ]
         } catch {
             throw Error.channelSetupError(error)
         }
-        
+
         let hostname = try gethostname() + "."
         precondition(hostname.hasSuffix(".local."), "host name \(hostname) should have suffix .local")
         self.hostname = hostname
@@ -82,7 +81,7 @@ class Responder: UDPChannelDelegate {
         }
         channels.forEach { $0.delegate = self }
     }
-    
+
     func channel(_ channel: UDPChannel, didReceive data: Data, from source: Socket.Address) {
         let message: Message
         do {
@@ -98,15 +97,14 @@ class Responder: UDPChannelDelegate {
         } else {
             var answers = [ResourceRecord]()
             var additional = [ResourceRecord]()
-            
+
             for question in message.questions {
                 switch question.type {
                 case .pointer:
                     for service in publishedServices {
                         if let pointerRecord = service.pointerRecord,
                             let serviceRecord = service.serviceRecord,
-                            pointerRecord.name == question.name
-                        {
+                            pointerRecord.name == question.name {
                             answers.append(pointerRecord)
                             additional.append(serviceRecord)
                             additional += hostRecords
@@ -140,11 +138,11 @@ class Responder: UDPChannelDelegate {
                     break
                 }
             }
-            
+
             guard answers.count > 0 else {
                 return
             }
-            
+
             var response = Message(type: .response,
                                    questions: message.questions,
                                    answers: answers,
@@ -173,7 +171,7 @@ class Responder: UDPChannelDelegate {
                     // bit described in Section 10.2, "Announcements to Flush Outdated Cache
                     // Entries", MUST NOT be set in legacy unicast responses.
                     response.id = message.id
-                    
+
                     try channel.unicast(response.serialize(), to: source)
                 }
             } catch {
@@ -181,7 +179,7 @@ class Responder: UDPChannelDelegate {
             }
         }
     }
-    
+
     func publish(_ service: NetService) throws {
         guard let pointerRecord = service.pointerRecord, let serviceRecord = service.serviceRecord else {
             throw Error.missingResourceRecords

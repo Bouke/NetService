@@ -15,12 +15,12 @@ class UDPChannel {
         case couldNotListen(Swift.Error)
         case couldNotJoin(Swift.Error)
     }
-    
+
     let socket: Socket
     let group: Socket.Address
     let queue: DispatchQueue
     weak var delegate: UDPChannelDelegate?
-    
+
     init(group: Socket.Address, queue: DispatchQueue) throws {
         self.group = group
         self.queue = queue
@@ -44,7 +44,7 @@ class UDPChannel {
         } catch {
             throw Error.couldNotJoin(error)
         }
-        
+
         queue.async {
             while true {
                 var buffer = Data(capacity: 1024) //todo: how big's the buffer?
@@ -60,11 +60,11 @@ class UDPChannel {
             }
         }
     }
-    
+
     func multicast(_ data: Data) throws {
         try self.socket.write(from: data, to: group)
     }
-    
+
     func unicast(_ data: Data, to destination: Socket.Address) throws {
         try self.socket.write(from: data, to: destination)
     }
