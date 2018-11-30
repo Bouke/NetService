@@ -440,3 +440,14 @@ public protocol NetServiceDelegate: class {
     func netService(_ sender: NetService,
                     didAcceptConnectionWith socket: Socket)
 }
+
+// MARK:- Default Implementation
+public extension NetServiceDelegate {
+    func netServiceWillPublish(_ sender: NetService) { }
+    func netService(_ sender: NetService,
+                    didNotPublish error: Error) { }
+    func netServiceDidPublish(_ sender: NetService) { }
+    func netServiceDidStop(_ sender: NetService) { }
+    func netService(_ sender: NetService,
+                    didAcceptConnectionWith socket: Socket) { }
+}

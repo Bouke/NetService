@@ -1,4 +1,4 @@
-@testable import NetService
+import NetService
 import class XCTest.XCTestCase
 
 class BrowserTests: XCTestCase {
