@@ -1,4 +1,4 @@
-import Foundation
+import struct Foundation.Data
 import Cdns_sd
 
 #if os(Linux)
@@ -130,7 +130,6 @@ public class NetService {
                 DNSServiceUpdateRecord(serviceRef, nil, 0, UInt16(record.count), txtRecordPtr, 0)
             }
             guard error == 0 else {
-                print("did not update! \(error)")
                 return false
             }
         }
@@ -140,6 +139,11 @@ public class NetService {
 
     internal var serviceRef: DNSServiceRef? = nil
     internal var records: [DNSRecordRef] = []
+
+    /// The delegate for the receiver.
+    ///
+    /// The delegate must conform to the `NetServiceDelegate` protocol, and is not retained.
+    public weak var delegate: NetServiceDelegate?
 
     // MARK: Using Network Services
     var textRecord: Data? = nil
@@ -159,7 +163,7 @@ public class NetService {
         }
 
         guard error == 0 else {
-            print("did not publish! \(error)")
+            delegate?.netService(self, didNotPublish: ServiceError.Unmapped(error))
             return
         }
     }
