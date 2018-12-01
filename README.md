@@ -16,10 +16,12 @@ See also [NetService-Example](https://github.com/Bouke/NetService-Example).
 This code will publish a new NetService. It will also setup both IPv4 and IPv6 listening sockets at an available port.
 
 ```swift
+import Foundation
+import NetService
+
 let service = NetService(domain: "local.", type: "_hap._tcp.", name: "Zithoek", port: 0)
-service.publish(options: [.listenForConnections])
-service.schedule(in: .main, forMode: .defaultRunLoopMode)
 service.delegate = ...
+service.publish(options: [.listenForConnections])
 withExtendedLifetime((service, delegate)) {
     RunLoop.main.run()
 }
@@ -31,8 +33,8 @@ This code will start a search for the given service type.
 
 ```swift
 let browser = NetServiceBrowser()
-browser.searchForServices(ofType: "_airplay._tcp.", inDomain: "local.")
 browser.delegate = ...
+browser.searchForServices(ofType: "_airplay._tcp.", inDomain: "local.")
 withExtendedLifetime((browser, delegate)) {
     RunLoop.main.run()
 }

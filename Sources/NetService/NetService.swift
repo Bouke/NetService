@@ -1,31 +1,24 @@
-// Documentation © Apple, Inc.
+import Foundation
+import Cdns_sd
 
 #if os(Linux)
-    import Dispatch
+import Glibc
+#else
+import Darwin.C
 #endif
 
-import Foundation
-import Cifaddrs
-import DNS
-import Socket
+/// Undefined for LE
+func htonl(_ value: UInt32) -> UInt32 {
+    return value.byteSwapped
+}
+let ntohl = htonl
+func htons(_ value: UInt16) -> UInt16 {
+    return value.byteSwapped
+}
+let ntohs = htons
 
-let duplicateNameCheckTimeInterval = TimeInterval(3)
 
-// TODO: check name availability before claiming the service's name
-
-/// The `NetService` class represents a network service, either one your application publishes or is a client of. This class and the `NetServiceBrowser` class use multicast DNS to convey information about network services to and from your application. The API of `NetService` provides a convenient way to publish the services offered by your application <s>and to resolve the socket address for a service</s>.
-///
-/// The types of services you access using `NetService` are the same types that you access directly using BSD sockets. HTTP and FTP are two services commonly provided by systems. (For a list of common services and the ports used by those services, see the file `/etc/services`.) Applications can also define their own custom services to provide specific data to clients.
-///
-/// You can use the `NetService` class as either a publisher of a service or a client of a service. If your application publishes a service, your code must acquire a port and prepare a socket to communicate with clients. Once your socket is ready, you use the `NetService` class to notify clients that your service is ready. If your application is the client of a network service, you can <s>either create an `NetService` object directly (if you know the exact host and port information) or</s> use an `NetServiceBrowser` object to browse for services.
-///
-/// To publish a service, initialize your `NetService` object with the service name, domain, type, and port information. All of this information must be valid for the socket created by your application. Once initialized, call the `publish()` method to broadcast your service information to the network.
-///
-/// When connecting to a service, use the `NetServiceBrowser` class to locate the service on the network and obtain the corresponding `NetService` object. <s>Once you have the object, call the `resolve(withTimeout:)` method to verify that the service is available and ready for your application.</s> If it is, the `addresses` property provides the socket information you can use to connect to the service.
-///
-/// The methods of `NetService` operate asynchronously so your application is not impacted by the speed of the network. All information about a service is returned to your application through the `NetService` object’s delegate. You must provide a delegate object to respond to messages and to handle errors appropriately.
-public class NetService: Listener {
-
+public class NetService {
     internal var fqdn: String
 
     /// These constants specify options for a network service.
@@ -106,7 +99,7 @@ public class NetService: Listener {
     /// An array containing `Socket.Address` objects, each of which contains a socket address for the service. <s>Each `Socket.Address` object in the returned array contains an appropriate sockaddr structure that you can use to connect to the socket. The exact type of this structure depends on the service to which you are connecting.</s> If no addresses were resolved for the service, the returned array contains zero elements.
     ///
     /// It is possible for a single service to resolve to more than one address or not resolve to any addresses. A service might resolve to multiple addresses if the computer publishing the service is currently multihoming.
-    public internal(set) var addresses: [Socket.Address]?
+//    public internal(set) var addresses: [Socket.Address]?
 
     /// A string containing the domain for this service.
     ///
@@ -128,190 +121,47 @@ public class NetService: Listener {
     /// Sets the TXT record for the receiver, and returns a Boolean value that indicates whether the operation was successful.
     ///
     /// NOTE: Differs from Cocoa implementation (uses Data instead)
-    public func setTXTRecord(_ recordData: [String: String]?) -> Bool {
-        guard let recordData = recordData else {
-            textRecord = nil
-            return false
+    public func setTXTRecord(_ recordData: Data?) -> Bool {
+        textRecord = recordData
+
+        if let serviceRef = serviceRef {
+            var record = textRecord ?? Data([0])
+            let error = record.withUnsafeBytes { txtRecordPtr in
+                DNSServiceUpdateRecord(serviceRef, nil, 0, UInt16(record.count), txtRecordPtr, 0)
+            }
+            guard error == 0 else {
+                print("did not update! \(error)")
+                return false
+            }
         }
-        textRecord = TextRecord(name: fqdn, ttl: 120, attributes: recordData)
+
         return true
     }
 
-    /// The delegate for the receiver.
-    ///
-    /// The delegate must conform to the `NetServiceDelegate` protocol, and is not retained.
-    public weak var delegate: NetServiceDelegate?
+    internal var serviceRef: DNSServiceRef? = nil
+    internal var records: [DNSRecordRef] = []
 
     // MARK: Using Network Services
-    var listenQueue: DispatchQueue?
-    var socket4: Socket?
-    var socket6: Socket?
+    var textRecord: Data? = nil
 
-    var responder: Responder?
-    var pointerRecord: PointerRecord?
-    var serviceRecord: ServiceRecord?
-    var hostRecords: [ResourceRecord]?
-    var textRecord: TextRecord?
-
-    enum PublishState: Equatable {
-        case stopped
-        case lookingForDuplicates(Int, Timer)
-        case published
-        case didNotPublish(Error)
-
-        static func == (lhs: PublishState, rhs: PublishState) -> Bool {
-            switch (lhs, rhs) {
-            case (.stopped, .stopped), (.published, .published): return true
-            case (.lookingForDuplicates, .lookingForDuplicates): return true
-            default: return false
-            }
-        }
-    }
-    var publishState: PublishState = .stopped
-
-    /// Attempts to advertise the receiver on the network, with the given options.
-    ///
-    /// This method returns immediately, with success or failure indicated by the callbacks to the delegate.
-    /// - Parameter options: Options for the receiver. The supported options are described in `NetService.Options`.
     public func publish(options: Options = []) {
-        precondition(publishState == .stopped, "invalid state, should be .stopped")
-        precondition(port >= 0, "port should be >= 0")
+        assert(serviceRef == nil, "Service already published")
 
-        do {
-            responder = try Responder.shared()
-        } catch {
-            return publishError(error)
-        }
-        hostName = responder!.hostname
+        let flags: DNSServiceFlags = 0
+        let interfaceIndex = kDNSServiceInterfaceIndexAny
+        let regtype = self.type
+        let domain: String? = nil
+        let host: String? = nil
+        var record = textRecord ?? Data([0])
 
-        // TODO: support ipv6
-        // TODO: auto rename
-        // TODO: support noAutoRename option
-
-        delegate?.netServiceWillPublish(self)
-
-        if !options.contains(.noAutoRename) {
-            // check if name is taken -- allow others a few seconds to respond
-
-            responder!.listeners.append(self)
-            do {
-                try responder!.multicast(message: Message(type: .query, questions: [Question(name: fqdn, type: .service)]))
-            } catch {
-                return publishError(error)
-            }
-            // TODO: remove listener
-
-            let timer = Timer._scheduledTimer(withTimeInterval: duplicateNameCheckTimeInterval, repeats: false, block: {_ in self.publishPhaseTwo()})
-            publishState = .lookingForDuplicates(1, timer)
+        let error = record.withUnsafeBytes { txtRecordPtr in
+            DNSServiceRegister(&serviceRef, flags, UInt32(interfaceIndex), name, regtype, domain, host, htons(UInt16(port)), UInt16(record.count), txtRecordPtr, nil, nil)
         }
 
-        if options.contains(.listenForConnections) {
-            precondition(type.hasSuffix("._tcp."), "only listening on TCP is supported")
-
-            listenQueue = DispatchQueue.global(qos: .userInteractive)
-
-            do {
-                socket4 = try Socket.create(family: .inet, type: .stream, proto: .tcp)
-                try socket4!.listen(on: self.port)
-                self.port = Int(socket4!.signature!.port)
-
-                socket6 = try Socket.create(family: .inet6, type: .stream, proto: .tcp)
-                try socket6!.listen(on: self.port)
-            } catch {
-                publishError(error)
-            }
-
-            listenQueue!.async { [unowned self] in
-                while true {
-                    do {
-                        let responderSocket = try self.socket4!.acceptClientConnection()
-                        self.delegate?.netService(self, didAcceptConnectionWith: responderSocket)
-                    } catch {
-                        self.publishError(error)
-                        break
-                    }
-                }
-            }
-            listenQueue!.async { [unowned self] in
-                while true {
-                    do {
-                        let responderSocket = try self.socket6!.acceptClientConnection()
-                        self.delegate?.netService(self, didAcceptConnectionWith: responderSocket)
-                    } catch {
-                        self.publishError(error)
-                        break
-                    }
-                }
-            }
+        guard error == 0 else {
+            print("did not publish! \(error)")
+            return
         }
-
-        if options.contains(.noAutoRename) {
-            publishPhaseTwo()
-        }
-    }
-
-    func publishPhaseTwo() {
-        precondition(port > 0, "Port not configured")
-
-        if let index = responder!.listeners.index(where: {$0 === self }) {
-            responder!.listeners.remove(at: index)
-        }
-
-        addresses = responder!.addresses.map {
-            var address = $0
-            address.port = UInt16(self.port)
-            return address
-        }
-        pointerRecord = PointerRecord(name: "\(type)\(domain)", ttl: 4500, destination: fqdn)
-        serviceRecord = ServiceRecord(name: fqdn, ttl: 120, port: UInt16(port), server: hostName!)
-        textRecord?.name = fqdn
-
-        // broadcast availability
-        do {
-            try responder!.publish(self)
-        } catch {
-            return publishError(error)
-        }
-
-        publishState = .published
-        delegate?.netServiceDidPublish(self)
-    }
-
-    func publishError(_ error: Error) {
-        if case .lookingForDuplicates(let (_, timer)) = publishState {
-            timer.invalidate()
-        }
-        publishState = .didNotPublish(error)
-        delegate?.netService(self, didNotPublish: error)
-    }
-
-    func received(message: Message) {
-        guard case .lookingForDuplicates(let (number, timer)) = publishState else { return }
-
-      if message.answers.compactMap({ $0 as? ServiceRecord }).contains(where: { $0.name == fqdn }) {
-            timer.invalidate()
-
-            fqdn = "\(name) (\(number + 1)).\(type)\(domain)"
-            do {
-                try responder!.multicast(message: Message(type: .query, questions: [Question(name: fqdn, type: .service)]))
-            } catch {
-                return publishError(error)
-            }
-            let timer = Timer._scheduledTimer(withTimeInterval: duplicateNameCheckTimeInterval, repeats: false, block: {_ in
-                self.name = "\(self.name) (\(number + 1))"
-                self.publishPhaseTwo()
-            })
-            publishState = .lookingForDuplicates(number + 1, timer)
-        }
-    }
-
-    /// NOT IMPLEMENTED. <s>Starts a resolve process of a finite duration for the service.
-    ///
-    /// During the resolve period, the service sends `netServiceDidResolveAddress(_:)` to the delegate for each address it discovers that matches the service parameters. Once the timeout is hit, the service sends `netServiceDidStop(_:)` to the delegate. If no addresses resolve during the timeout period, the service sends `netService(_:didNotResolve:)` to the delegate.</s>
-    ///
-    /// - Parameter timeout: The maximum number of seconds to attempt a resolve. A value of 0.0 indicates no timeout and a resolve process of indefinite duration.
-    public func resolve(withTimeout timeout: TimeInterval) {
-        preconditionFailure("Not implemented")
     }
 
     /// The port on which the service is listening for connections.
@@ -320,134 +170,4 @@ public class NetService: Listener {
     ///
     /// If the object was initialized by calling `init(domain:type:name:)`, the value of this property is not valid (`-1`) until after the service has successfully been resolved (when `addresses` is `non-nil`).
     public internal(set) var port: Int = -1
-
-    /// NOT IMPLEMENTED. <s>Starts the monitoring of TXT-record updates for the receiver.
-    ///
-    /// The delegate must implement `netService(_:didUpdateTXTRecord:)`, which is called when the TXT record for the receiver is updated.</s>
-    func startMonitoring() {
-        preconditionFailure("Not implemented")
-    }
-
-    /// Halts a currently running attempt to publish or resolve a service.
-    ///
-    /// The delegate will receive `netServiceDidStop(_:)` after the service stops.
-    /// <s>It is safe to remove all strong references to the service immediately after calling `stop()`.</s>
-    public func stop() {
-        switch publishState {
-        case .stopped:
-            break
-        case .lookingForDuplicates(let (_, timer)):
-            timer.invalidate()
-        case .published:
-            try! responder!.unpublish(self)
-        case .didNotPublish:
-            break
-        }
-        publishState = .stopped
-        delegate?.netServiceDidStop(self)
-    }
-
-    /// NOT IMPLEMENTED. <s>Stops the monitoring of TXT-record updates for the receiver.</s>
-    func stopMonitoring() {
-        preconditionFailure("Not implemented")
-    }
-
-    // MARK: Obtaining the DNS Hostname
-
-    /// A string containing the DNS hostname for this service.
-    ///
-    /// This value is `nil` until the service has been resolved (when `addresses` is non-nil).
-    public internal(set) var hostName: String?
-}
-
-extension NetService: CustomDebugStringConvertible {
-    public var debugDescription: String {
-        return "NetService(domain: \(domain), type: \(type), name: \(name), port: \(port), hostName: \(String(describing: hostName))), addresses: \(String(describing: addresses)))"
-    }
-}
-
-/// The `NetServiceDelegate` protocol defines the optional methods implemented by delegates of `NetService` objects.
-public protocol NetServiceDelegate: class {
-
-    // MARK: Using Network Services
-
-    /// Notifies the delegate that the network is ready to publish the service.
-    ///
-    /// Publication of the service proceeds asynchronously and may still generate a call to the delegate’s `netService(_:didNotPublish:)` method if an error occurs.
-    ///
-    /// - Parameter sender: The service that is ready to publish.
-    func netServiceWillPublish(_ sender: NetService)
-
-    /// Notifies the delegate that a service could not be published.
-    ///
-    /// This method may be called long after a `netServiceWillPublish(_:)` message has been delivered to the delegate.
-    ///
-    /// - Parameters:
-    ///   - sender: The service that could not be published.
-    ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys NSNetServicesErrorCode and NSNetServicesErrorDomain.</s>
-    func netService(_ sender: NetService,
-                    didNotPublish error: Error)
-
-    /// Notifies the delegate that a service was successfully published.
-    ///
-    /// - Parameter sender: The service that was published.
-    func netServiceDidPublish(_ sender: NetService)
-
-    /// Notifies the delegate that the network is ready to resolve the service.
-    ///
-    /// Resolution of the service proceeds asynchronously and may still generate a call to the delegate’s `netService(_:didNotResolve:)` method if an error occurs.
-    ///
-    /// - Parameter sender: The service that the network is ready to resolve.
-//    func netServiceWillResolve(_ sender: NetService)
-
-    /// Informs the delegate that an error occurred during resolution of a given service.
-    ///
-    /// Clients may try to resolve again upon receiving this error. For example, a DNS rotary may yield different IP addresses on different resolution requests. A common error condition is that no addresses were resolved during the timeout period specified in `resolve(withTimeout:)`.
-    ///
-    /// - Parameters:
-    ///   - sender: The service that did not resolve.
-    ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys errorCode and errorDomain.</s>
-//    func netService(_ sender: NetService, didNotResolve error: Error)
-
-    /// Informs the delegate that the address for a given service was resolved.
-    ///
-    /// The delegate can use the `addresses` method to retrieve the service’s address. If the delegate needs only one address, it can stop the resolution process using `stop()`. Otherwise, the resolution will continue until the timeout specified in `resolve(withTimeout:)` is reached.
-    ///
-    /// - Parameter sender: The service that was resolved.
-//    func netServiceDidResolveAddress(_ sender: NetService)
-
-    /// Notifies the delegate that the TXT record for a given service has been updated.
-    ///
-    /// - Parameters:
-    ///   - sender: The service whose TXT record was updated.
-    ///   - data: The new TXT record.
-//    func netService(_ sender: NetService, didUpdateTXTRecord data: Data)
-
-    /// Informs the delegate that a publish() or resolve(withTimeout:) request was stopped.
-    ///
-    /// - Parameter sender: The service that stopped.
-    func netServiceDidStop(_ sender: NetService)
-
-    // MARK: Accepting Connections
-
-    /// Called when a client connects to a service managed by NetService.
-    ///
-    /// When you publish a service, if you set the `listenForConnections` flag in the service options, the service object accepts connections on behalf of your app. Later, when a client connects to that service, the service object calls this method to provide the app with a pair of streams for communicating with that client.
-    ///
-    /// - Parameters:
-    ///   - sender: The net service object that the client connected to.
-    ///   - socket: A `Socket` object for sending and receiving data to and from the client.
-    func netService(_ sender: NetService,
-                    didAcceptConnectionWith socket: Socket)
-}
-
-// MARK:- Default Implementation
-public extension NetServiceDelegate {
-    func netServiceWillPublish(_ sender: NetService) { }
-    func netService(_ sender: NetService,
-                    didNotPublish error: Error) { }
-    func netServiceDidPublish(_ sender: NetService) { }
-    func netServiceDidStop(_ sender: NetService) { }
-    func netService(_ sender: NetService,
-                    didAcceptConnectionWith socket: Socket) { }
 }
