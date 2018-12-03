@@ -1,26 +1,17 @@
+import CoreFoundation
+
 import struct Foundation.Data
-//import struct Foundation.CFFileDescriptorContext
-import struct Foundation.CFSocketContext
-import struct Foundation.CFRunLoopMode
-import struct Foundation.CFSocketCallBackType
-import class Foundation.CFSocket
-//import class Foundation.CFFileDescriptor
-import class Foundation.CFRunLoopSource
-//import func Foundation.CFFileDescriptorCreateRunLoopSource
-//import func Foundation.CFFileDescriptorCreate
-import func Foundation.CFRunLoopAddSource
-import func Foundation.CFRunLoopGetCurrent
-import func Foundation.CFSocketCreateRunLoopSource
-//import func Foundation.CFFileDescriptorGetNativeDescriptor
-import func Foundation.CFSocketCreateWithNative
-import typealias Foundation.CFSocketCallBack
-import class Foundation.RunLoop
 import Cdns_sd
 
 #if os(Linux)
 import Glibc
 #else
 import Darwin.C
+#endif
+
+#if !os(Linux)
+    internal let kCFSocketReadCallBack = CFSocketCallBackType.readCallBack.rawValue
+    internal let kCFRunLoopCommonModes = CFRunLoopMode.commonModes
 #endif
 
 struct ServiceFlags: OptionSet {
@@ -43,19 +34,14 @@ func htons(_ value: UInt16) -> UInt16 {
 let ntohs = htons
 
 let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
-    print("called!!")
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
-    //guard service != nil else { return }
     guard errorCode == kDNSServiceErr_NoError else {
-        print(errorCode)
         service.didNotPublish(error: NetServiceError.Unmapped(errorCode))
         return
     }
     let name = String(cString: name!)
-    print(name)
-    print(flags)
     let flags = ServiceFlags(rawValue: flags)
-    print(flags)
+    print(flags) // huh? 2 on macOS / 0 on Linux
     if flags.contains(.add) {
         service.didPublish(name: name)
     }
@@ -67,11 +53,9 @@ let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
 }
 
 
-//DNSServiceRegisterReply
-
 public class NetService {
     internal var fqdn: String
-//    private var sourceFd: CFFileDescriptor? = nil
+
     private var socket: CFSocket? = nil
     private var source: CFRunLoopSource? = nil
 
@@ -240,17 +224,12 @@ public class NetService {
 
         let fd = DNSServiceRefSockFD(serviceRef)
         let info = Unmanaged.passUnretained(self).toOpaque()
-//        var context = CFFileDescriptorContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
-//        sourceFd = CFFileDescriptorCreate(nil, fd, false, _processResult, &context)
-//        let nfd = CFFileDescriptorGetNativeDescriptor(sourceFd)
-//        source = CFFileDescriptorCreateRunLoopSource(nil, sourceFd, 0)
 
         var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
 
-        socket = CFSocketCreateWithNative(nil, fd, CFSocketCallBackType.readCallBack.rawValue, _processResult, &context)
+        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketReadCallBack), _processResult, &context)
         source = CFSocketCreateRunLoopSource(nil, socket, 0)
-
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.defaultMode)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes)
     }
 
     fileprivate func didPublish(name: String) {

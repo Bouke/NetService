@@ -35,6 +35,7 @@ class MyDelegate: NetServiceDelegate {
  let delegate = MyDelegate()
 let service = NetService(domain: "local.", type: "_hap._tcp.", name: "Zithoek1", port: 8001)
 service.delegate = delegate
+
 var attributes = [
     "ff": "0",
     "ci": "2",
@@ -46,28 +47,13 @@ var attributes = [
     "pv": "1.0",
     "id": "7F:43:D1:53:4A:DA",
 ]
-
 service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
-// service.delegate = delegate
 service.publish(options: [.listenForConnections])
-//sleep(5)
-//print("updating...")
-//attributes["ff"] = "1"
-//service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
-//service.poll()
+
+attributes["ff"] = "1"
+service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
+
 print("starting runloop...")
 withExtendedLifetime((service, delegate)) {
     RunLoop.main.run()
 }
-
-//RunLoop.main.add(<#T##aPort: Port##Port#>, forMode: <#T##RunLoopMode#>)
-
-//import Foundation
-
-//CFOptionFlags.read
-
-//CFRunLoopMode.defaultMode
-
-//RunLoop.main.add
-//CFRunLoopAddSource(<#T##rl: CFRunLoop!##CFRunLoop!#>, <#T##source: CFRunLoopSource!##CFRunLoopSource!#>, <#T##mode: CFRunLoopMode!##CFRunLoopMode!#>)
-//CFFileDescriptorCreateRunLoopSource(<#T##allocator: CFAllocator!##CFAllocator!#>, <#T##f: CFFileDescriptor!##CFFileDescriptor!#>, <#T##order: CFIndex##CFIndex#>)
