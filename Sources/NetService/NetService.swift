@@ -1,4 +1,20 @@
 import struct Foundation.Data
+//import struct Foundation.CFFileDescriptorContext
+import struct Foundation.CFSocketContext
+import struct Foundation.CFRunLoopMode
+import struct Foundation.CFSocketCallBackType
+import class Foundation.CFSocket
+//import class Foundation.CFFileDescriptor
+import class Foundation.CFRunLoopSource
+//import func Foundation.CFFileDescriptorCreateRunLoopSource
+//import func Foundation.CFFileDescriptorCreate
+import func Foundation.CFRunLoopAddSource
+import func Foundation.CFRunLoopGetCurrent
+import func Foundation.CFSocketCreateRunLoopSource
+//import func Foundation.CFFileDescriptorGetNativeDescriptor
+import func Foundation.CFSocketCreateWithNative
+import typealias Foundation.CFSocketCallBack
+import class Foundation.RunLoop
 import Cdns_sd
 
 #if os(Linux)
@@ -6,6 +22,15 @@ import Glibc
 #else
 import Darwin.C
 #endif
+
+struct ServiceFlags: OptionSet {
+    public let rawValue: DNSServiceFlags
+    init(rawValue: DNSServiceFlags) {
+        self.rawValue = rawValue
+    }
+
+    public static let add = ServiceFlags(rawValue: DNSServiceFlags(kDNSServiceFlagsAdd))
+}
 
 /// Undefined for LE
 func htonl(_ value: UInt32) -> UInt32 {
@@ -17,9 +42,38 @@ func htons(_ value: UInt16) -> UInt16 {
 }
 let ntohs = htons
 
+let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
+    print("called!!")
+    let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
+    //guard service != nil else { return }
+    guard errorCode == kDNSServiceErr_NoError else {
+        print(errorCode)
+        service.didNotPublish(error: NetServiceError.Unmapped(errorCode))
+        return
+    }
+    let name = String(cString: name!)
+    print(name)
+    print(flags)
+    let flags = ServiceFlags(rawValue: flags)
+    print(flags)
+    if flags.contains(.add) {
+        service.didPublish(name: name)
+    }
+}
+
+let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
+    let service: NetService = Unmanaged.fromOpaque(info!).takeUnretainedValue()
+    service.processResult()
+}
+
+
+//DNSServiceRegisterReply
 
 public class NetService {
     internal var fqdn: String
+//    private var sourceFd: CFFileDescriptor? = nil
+    private var socket: CFSocket? = nil
+    private var source: CFRunLoopSource? = nil
 
     /// These constants specify options for a network service.
     public struct Options: OptionSet {
@@ -94,6 +148,21 @@ public class NetService {
 
     // MARK: Configuring Network Services
 
+    public class func data(fromTXTRecord txtDictionary: [String : Data]) -> Data {
+        return txtDictionary.reduce(Data()) {
+            let attr = "\($1.key)=".utf8 + $1.value
+            return $0 + Data([UInt8(attr.count)]) + Data(attr)
+        }
+    }
+
+    // EXTRA!
+    public class func data(fromTXTRecord txtDictionary: [String : String]) -> Data {
+        return txtDictionary.reduce(Data()) {
+            let attr = "\($1.key)=\($1.value)".utf8
+            return $0 + Data([UInt8(attr.count)]) + Data(attr)
+        }
+    }
+
     /// A read-only array containing `Socket.Address` objects, each of which contains a socket address for the service.
     ///
     /// An array containing `Socket.Address` objects, each of which contains a socket address for the service. <s>Each `Socket.Address` object in the returned array contains an appropriate sockaddr structure that you can use to connect to the socket. The exact type of this structure depends on the service to which you are connecting.</s> If no addresses were resolved for the service, the returned array contains zero elements.
@@ -151,6 +220,8 @@ public class NetService {
     public func publish(options: Options = []) {
         assert(serviceRef == nil, "Service already published")
 
+        // TODO: map flags
+
         let flags: DNSServiceFlags = 0
         let interfaceIndex = kDNSServiceInterfaceIndexAny
         let regtype = self.type
@@ -159,13 +230,40 @@ public class NetService {
         var record = textRecord ?? Data([0])
 
         let error = record.withUnsafeBytes { txtRecordPtr in
-            DNSServiceRegister(&serviceRef, flags, UInt32(interfaceIndex), name, regtype, domain, host, htons(UInt16(port)), UInt16(record.count), txtRecordPtr, nil, nil)
+            DNSServiceRegister(&serviceRef, flags, UInt32(interfaceIndex), name, regtype, domain, host, htons(UInt16(port)), UInt16(record.count), txtRecordPtr, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
         }
 
         guard error == 0 else {
-            delegate?.netService(self, didNotPublish: ServiceError.Unmapped(error))
+            delegate?.netService(self, didNotPublish: NetServiceError.Unmapped(error))
             return
         }
+
+        let fd = DNSServiceRefSockFD(serviceRef)
+        let info = Unmanaged.passUnretained(self).toOpaque()
+//        var context = CFFileDescriptorContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
+//        sourceFd = CFFileDescriptorCreate(nil, fd, false, _processResult, &context)
+//        let nfd = CFFileDescriptorGetNativeDescriptor(sourceFd)
+//        source = CFFileDescriptorCreateRunLoopSource(nil, sourceFd, 0)
+
+        var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
+
+        socket = CFSocketCreateWithNative(nil, fd, CFSocketCallBackType.readCallBack.rawValue, _processResult, &context)
+        source = CFSocketCreateRunLoopSource(nil, socket, 0)
+
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.defaultMode)
+    }
+
+    fileprivate func didPublish(name: String) {
+        self.name = name
+        delegate?.netServiceDidPublish(self)
+    }
+
+    fileprivate func didNotPublish(error: NetServiceError) {
+        delegate?.netService(self, didNotPublish: error)
+    }
+
+    fileprivate func processResult() {
+        DNSServiceProcessResult(serviceRef)
     }
 
     /// The port on which the service is listening for connections.

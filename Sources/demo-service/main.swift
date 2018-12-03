@@ -1,4 +1,5 @@
 import struct Foundation.Data
+import class Foundation.RunLoop
 import NetService
 
 #if os(Linux)
@@ -11,29 +12,29 @@ import Darwin.C
 // import Foundation
 // import NetService
 
-// class MyDelegate: NetServiceDelegate {
-//     func netServiceWillPublish(_ sender: NetService) {
-//         print("netServiceWillPublish")
-//     }
-//     func netService(_ sender: NetService,
-//                     didNotPublish error: Error) {
-//         print("didNotPublish \(error)")
-//     }
-//     func netServiceDidPublish(_ sender: NetService) {
-//         print("netServiceDidPublish")
-//     }
-//     func netServiceDidStop(_ sender: NetService) {
-//         print("netServiceDidStop")
-//     }
-//     // func netService(_ sender: NetService,
-//     //                 didAcceptConnectionWith socket: Socket) {
-//     //     print("didAcceptConnectionWith")
-//     // }
-// }
+class MyDelegate: NetServiceDelegate {
+    func netServiceWillPublish(_ sender: NetService) {
+        print("netServiceWillPublish")
+    }
+    func netService(_ sender: NetService,
+                    didNotPublish error: Error) {
+        print("didNotPublish \(error)")
+    }
+    func netServiceDidPublish(_ sender: NetService) {
+        print("netServiceDidPublish")
+    }
+    func netServiceDidStop(_ sender: NetService) {
+        print("netServiceDidStop")
+    }
+//    func netService(_ sender: NetService,
+//                    didAcceptConnectionWith socket: Socket) {
+//        print("didAcceptConnectionWith")
+//    }
+}
 
-// let delegate = MyDelegate()
+ let delegate = MyDelegate()
 let service = NetService(domain: "local.", type: "_hap._tcp.", name: "Zithoek1", port: 8001)
-
+service.delegate = delegate
 var attributes = [
     "ff": "0",
     "ci": "2",
@@ -45,23 +46,28 @@ var attributes = [
     "pv": "1.0",
     "id": "7F:43:D1:53:4A:DA",
 ]
-func rdata(_ attrs: [String: String]) -> Data {
-    return attrs.reduce(Data()) {
-        let attr = "\($1.key)=\($1.value)".utf8
-        return $0 + Data([UInt8(attr.count)]) + Data(attr)
-    }
-}
 
-service.setTXTRecord(rdata(attributes))
+service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
 // service.delegate = delegate
 service.publish(options: [.listenForConnections])
-sleep(5)
-print("updating...")
-attributes["ff"] = "1"
-service.setTXTRecord(rdata(attributes))
-sleep(60)
+//sleep(5)
+//print("updating...")
+//attributes["ff"] = "1"
+//service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
+//service.poll()
+print("starting runloop...")
+withExtendedLifetime((service, delegate)) {
+    RunLoop.main.run()
+}
 
+//RunLoop.main.add(<#T##aPort: Port##Port#>, forMode: <#T##RunLoopMode#>)
 
-// withExtendedLifetime((service, delegate)) {
-    // RunLoop.main.run()
-// }
+//import Foundation
+
+//CFOptionFlags.read
+
+//CFRunLoopMode.defaultMode
+
+//RunLoop.main.add
+//CFRunLoopAddSource(<#T##rl: CFRunLoop!##CFRunLoop!#>, <#T##source: CFRunLoopSource!##CFRunLoopSource!#>, <#T##mode: CFRunLoopMode!##CFRunLoopMode!#>)
+//CFFileDescriptorCreateRunLoopSource(<#T##allocator: CFAllocator!##CFAllocator!#>, <#T##f: CFFileDescriptor!##CFFileDescriptor!#>, <#T##order: CFIndex##CFIndex#>)

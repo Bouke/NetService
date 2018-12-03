@@ -18,7 +18,7 @@ public protocol NetServiceDelegate: class {
     ///   - sender: The service that could not be published.
     ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys NSNetServicesErrorCode and NSNetServicesErrorDomain.</s>
     func netService(_ sender: NetService,
-                    didNotPublish error: ServiceError)
+                    didNotPublish error: NetServiceError)
 
     /// Notifies the delegate that a service was successfully published.
     ///
@@ -77,7 +77,7 @@ public protocol NetServiceDelegate: class {
 public extension NetServiceDelegate {
     func netServiceWillPublish(_ sender: NetService) { }
     func netService(_ sender: NetService,
-                    didNotPublish error: Error) { }
+                    didNotPublish error: NetServiceError) { }
     func netServiceDidPublish(_ sender: NetService) { }
     func netServiceDidStop(_ sender: NetService) { }
 //    func netService(_ sender: NetService,
