@@ -50,10 +50,17 @@ var attributes = [
 service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
 service.publish(options: [.listenForConnections])
 
-attributes["ff"] = "1"
-service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
+import struct Foundation.Date
 
-print("starting runloop...")
+print("5 sec runloop...")
+RunLoop.main.run(until: Date.init(timeIntervalSinceNow: 5))
+
+service.stop()
+
+//attributes["ff"] = "1"
+//service.setTXTRecord(NetService.data(fromTXTRecord: attributes))
+
+print("indefinite runloop...")
 withExtendedLifetime((service, delegate)) {
     RunLoop.main.run()
 }

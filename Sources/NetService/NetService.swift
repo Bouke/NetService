@@ -42,9 +42,13 @@ let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, nam
     let name = String(cString: name!)
     let flags = ServiceFlags(rawValue: flags)
     print(flags) // huh? 2 on macOS / 0 on Linux
-    if flags.contains(.add) {
+    #if os(Linux) // avahi doesn't pass in flags
         service.didPublish(name: name)
-    }
+    #else
+        if flags.contains(.add) {
+            service.didPublish(name: name)
+        }
+    #endif
 }
 
 let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
@@ -198,11 +202,16 @@ public class NetService {
     /// The delegate must conform to the `NetServiceDelegate` protocol, and is not retained.
     public weak var delegate: NetServiceDelegate?
 
+    // MARK: Managing Run Loops
+
+
     // MARK: Using Network Services
     var textRecord: Data? = nil
 
     public func publish(options: Options = []) {
         assert(serviceRef == nil, "Service already published")
+
+        delegate?.netServiceWillPublish(self)
 
         // TODO: map flags
 
@@ -228,10 +237,32 @@ public class NetService {
         var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
 
         socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketReadCallBack), _processResult, &context)
+
+        // Don't close the underlying socket on invalidate, as it is owned by dns_sd.
+        var socketFlags = CFSocketGetSocketFlags(socket)
+        socketFlags &= ~CFOptionFlags(kCFSocketCloseOnInvalidate)
+        CFSocketSetSocketFlags(socket, socketFlags)
+
         source = CFSocketCreateRunLoopSource(nil, socket, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes)
     }
 
+    public func stop() {
+        assert(serviceRef != nil, "Service already stopped")
+        CFRunLoopSourceInvalidate(source)
+        CFSocketInvalidate(socket)
+        DNSServiceRefDeallocate(serviceRef)
+        delegate?.netServiceDidStop(self)
+    }
+
+    /// The port on which the service is listening for connections.
+    ///
+    /// If the object was initialized by calling `init(domain:type:name:port:)` (whether by your code or by a browser object), then the value was set when the object was first initialized.
+    ///
+    /// If the object was initialized by calling `init(domain:type:name:)`, the value of this property is not valid (`-1`) until after the service has successfully been resolved (when `addresses` is `non-nil`).
+    public internal(set) var port: Int = -1
+
+    //MARK:-
     fileprivate func didPublish(name: String) {
         self.name = name
         delegate?.netServiceDidPublish(self)
@@ -244,11 +275,4 @@ public class NetService {
     fileprivate func processResult() {
         DNSServiceProcessResult(serviceRef)
     }
-
-    /// The port on which the service is listening for connections.
-    ///
-    /// If the object was initialized by calling `init(domain:type:name:port:)` (whether by your code or by a browser object), then the value was set when the object was first initialized.
-    ///
-    /// If the object was initialized by calling `init(domain:type:name:)`, the value of this property is not valid (`-1`) until after the service has successfully been resolved (when `addresses` is `non-nil`).
-    public internal(set) var port: Int = -1
 }
