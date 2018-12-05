@@ -3,37 +3,7 @@ import CoreFoundation
 import struct Foundation.Data
 import Cdns_sd
 
-#if os(Linux)
-import Glibc
-#else
-import Darwin.C
-#endif
-
-#if !os(Linux)
-    internal let kCFSocketReadCallBack = CFSocketCallBackType.readCallBack.rawValue
-    internal let kCFRunLoopCommonModes = CFRunLoopMode.commonModes
-#endif
-
-struct ServiceFlags: OptionSet {
-    public let rawValue: DNSServiceFlags
-    init(rawValue: DNSServiceFlags) {
-        self.rawValue = rawValue
-    }
-
-    public static let add = ServiceFlags(rawValue: DNSServiceFlags(kDNSServiceFlagsAdd))
-}
-
-/// Undefined for LE
-func htonl(_ value: UInt32) -> UInt32 {
-    return value.byteSwapped
-}
-let ntohl = htonl
-func htons(_ value: UInt16) -> UInt16 {
-    return value.byteSwapped
-}
-let ntohs = htons
-
-let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
+fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         service.didNotPublish(error: NetServiceError.Unmapped(errorCode))
@@ -41,8 +11,9 @@ let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, nam
     }
     let name = String(cString: name!)
     let flags = ServiceFlags(rawValue: flags)
-    print(flags) // huh? 2 on macOS / 0 on Linux
-    #if os(Linux) // avahi doesn't pass in flags
+    #if os(Linux)
+        // Avahi targets an older version of dns_sd and doesn't pass in flags,
+        // see also: https://github.com/lathiat/avahi/issues/207.
         service.didPublish(name: name)
     #else
         if flags.contains(.add) {
@@ -51,15 +22,18 @@ let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, nam
     #endif
 }
 
-let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
+fileprivate let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
     let service: NetService = Unmanaged.fromOpaque(info!).takeUnretainedValue()
     service.processResult()
 }
 
 
 public class NetService {
-    internal var fqdn: String
+    private var fqdn: String
 
+    private var serviceRef: DNSServiceRef? = nil
+    private var records: [DNSRecordRef] = []
+    private var textRecord: Data? = nil
     private var socket: CFSocket? = nil
     private var source: CFRunLoopSource? = nil
 
@@ -194,9 +168,6 @@ public class NetService {
         return true
     }
 
-    internal var serviceRef: DNSServiceRef? = nil
-    internal var records: [DNSRecordRef] = []
-
     /// The delegate for the receiver.
     ///
     /// The delegate must conform to the `NetServiceDelegate` protocol, and is not retained.
@@ -206,7 +177,6 @@ public class NetService {
 
 
     // MARK: Using Network Services
-    var textRecord: Data? = nil
 
     public func publish(options: Options = []) {
         assert(serviceRef == nil, "Service already published")
@@ -223,7 +193,7 @@ public class NetService {
         var record = textRecord ?? Data([0])
 
         let error = record.withUnsafeBytes { txtRecordPtr in
-            DNSServiceRegister(&serviceRef, flags, UInt32(interfaceIndex), name, regtype, domain, host, htons(UInt16(port)), UInt16(record.count), txtRecordPtr, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
+            DNSServiceRegister(&serviceRef, flags, UInt32(interfaceIndex), name, regtype, domain, host, UInt16(port).bigEndian, UInt16(record.count), txtRecordPtr, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
         }
 
         guard error == 0 else {
