@@ -32,7 +32,7 @@ public protocol NetServiceDelegate: class {
     /// Resolution of the service proceeds asynchronously and may still generate a call to the delegate’s `netService(_:didNotResolve:)` method if an error occurs.
     ///
     /// - Parameter sender: The service that the network is ready to resolve.
-    //    func netServiceWillResolve(_ sender: NetService)
+    func netServiceWillResolve(_ sender: NetService)
 
     /// Informs the delegate that an error occurred during resolution of a given service.
     ///
@@ -41,14 +41,14 @@ public protocol NetServiceDelegate: class {
     /// - Parameters:
     ///   - sender: The service that did not resolve.
     ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys errorCode and errorDomain.</s>
-    //    func netService(_ sender: NetService, didNotResolve error: Error)
+    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber])
 
     /// Informs the delegate that the address for a given service was resolved.
     ///
     /// The delegate can use the `addresses` method to retrieve the service’s address. If the delegate needs only one address, it can stop the resolution process using `stop()`. Otherwise, the resolution will continue until the timeout specified in `resolve(withTimeout:)` is reached.
     ///
     /// - Parameter sender: The service that was resolved.
-    //    func netServiceDidResolveAddress(_ sender: NetService)
+    func netServiceDidResolveAddress(_ sender: NetService)
 
     /// Notifies the delegate that the TXT record for a given service has been updated.
     ///
@@ -81,7 +81,8 @@ public extension NetServiceDelegate {
     func netService(_ sender: NetService,
                     didNotPublish error: NetServiceError) { }
     func netServiceDidPublish(_ sender: NetService) { }
+    func netServiceWillResolve(_ sender: NetService) { }
+    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) { }
+    func netServiceDidResolveAddress(_ sender: NetService) { }
     func netServiceDidStop(_ sender: NetService) { }
-//    func netService(_ sender: NetService,
-//                    didAcceptConnectionWith socket: Socket) { }
 }

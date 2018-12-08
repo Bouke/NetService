@@ -21,6 +21,8 @@ let register = parser.add(option: "-R", kind: [String].self,
                           usage: "<Name> <Type> <Domain> <Port> [<TXT>...]             (Register a service)")
 let browse = parser.add(option: "-B", kind: [String].self,
                         usage: "       <Type> <Domain>                     (Browse for service instances)")
+let resolve = parser.add(option: "-L", kind: [String].self,
+                         usage: "<Name> <Type> <Domain>                       (Resolve a service instance)")
 let result = try parser.parse(Array(CommandLine.arguments.dropFirst()))
 
 var keepRunning = true
@@ -59,7 +61,7 @@ if result.get(enumerateBrowsingDomains) != nil {
 }
 
 if let register = result.get(register) {
-    guard register.count >= 4, let port = Int32(register[3]) else { // key=value...
+    guard register.count >= 4, let port = Int32(register[3]) else {
         print("Usage: dns-sd -R <Name> <Type> <Domain> <Port> [<TXT>...]")
         exit(-1)
     }
@@ -98,4 +100,23 @@ if let browse = result.get(browse) {
         }
     }
     browser.stop()
+}
+
+if let resolve = result.get(resolve) {
+    guard resolve.count >= 2 else {
+        print("Usage: dns-sd -L <Name> <Type> <Domain>")
+        exit(-1)
+    }
+    let domain = resolve.count == 3 ? resolve[2] : "local."
+    print("Lookup \(resolve[0]).\(resolve[1]).\(domain)")
+    let service = NetService(domain: domain, type: resolve[1], name: resolve[0])
+    let delegate = ResolveServiceDelegate()
+    service.delegate = delegate
+    service.resolve()
+    withExtendedLifetime([service, delegate]) {
+        while keepRunning {
+            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+        }
+    }
+    service.stop()
 }

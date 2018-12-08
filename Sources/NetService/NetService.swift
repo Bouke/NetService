@@ -2,6 +2,7 @@ import CoreFoundation
 
 import struct Foundation.Data
 import class Foundation.NSNumber
+import struct Foundation.TimeInterval
 import Cdns_sd
 
 fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
@@ -23,11 +24,25 @@ fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, er
     #endif
 }
 
+fileprivate let _resolveReply: DNSServiceResolveReply = { sdRef, flags, interfaceIndex, errorCode, fullname, hosttarget, port, txtLen, txtRecord, context in
+    let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
+    guard errorCode == kDNSServiceErr_NoError else {
+        service.didNotResolve(error: errorCode)
+        return
+    }
+    let hosttarget = String(cString: hosttarget!)
+    let port = UInt16(bigEndian: port)
+    let textRecord = txtRecord.map { Data(bytes: $0, count: Int(txtLen)) }
+    service.didResolveAddress(
+        host: hosttarget,
+        port: port,
+        textRecord: textRecord)
+}
+
 fileprivate let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
     let service: NetService = Unmanaged.fromOpaque(info!).takeUnretainedValue()
     service.processResult()
 }
-
 
 public class NetService {
     private var fqdn: String
@@ -126,12 +141,12 @@ public class NetService {
         }
     }
 
-    /// A read-only array containing `Socket.Address` objects, each of which contains a socket address for the service.
+    /// A read-only array containing `NSData` objects, each of which contains a socket address for the service.
     ///
-    /// An array containing `Socket.Address` objects, each of which contains a socket address for the service. <s>Each `Socket.Address` object in the returned array contains an appropriate sockaddr structure that you can use to connect to the socket. The exact type of this structure depends on the service to which you are connecting.</s> If no addresses were resolved for the service, the returned array contains zero elements.
+    /// An array containing `Socket.Address` objects, each of which contains a socket address for the service. <s>Each `NSData` object in the returned array contains an appropriate sockaddr structure that you can use to connect to the socket. The exact type of this structure depends on the service to which you are connecting.</s> If no addresses were resolved for the service, the returned array contains zero elements.
     ///
     /// It is possible for a single service to resolve to more than one address or not resolve to any addresses. A service might resolve to multiple addresses if the computer publishing the service is currently multihoming.
-//    public internal(set) var addresses: [Socket.Address]?
+    public internal(set) var addresses: [Data]?
 
     /// A string containing the domain for this service.
     ///
@@ -149,6 +164,10 @@ public class NetService {
     ///
     /// This value is set when the object is first initialized, whether by your code or by a browser object. See `init(domain:type:name:)` for more information.
     public var type: String
+
+    public func txtRecordData() -> Data? {
+        return textRecord
+    }
 
     /// Sets the TXT record for the receiver, and returns a Boolean value that indicates whether the operation was successful.
     public func setTXTRecord(_ recordData: Data?) -> Bool {
@@ -178,28 +197,49 @@ public class NetService {
     // MARK: Using Network Services
 
     public func publish(options: Options = []) {
-        assert(serviceRef == nil, "Service already published")
+        guard serviceRef == nil else {
+            return didNotPublish(error: -72003) // CFNetServiceErrorInProgress
+        }
 
         delegate?.netServiceWillPublish(self)
 
         // TODO: map flags
 
-        let flags: DNSServiceFlags = 0
-        let interfaceIndex = kDNSServiceInterfaceIndexAny
         let regtype = self.type
-        let domain: String? = nil
-        let host: String? = nil
         var record = textRecord ?? Data([0])
 
         let error = record.withUnsafeBytes { txtRecordPtr in
-            DNSServiceRegister(&serviceRef, flags, UInt32(interfaceIndex), name, regtype, domain, host, UInt16(port).bigEndian, UInt16(record.count), txtRecordPtr, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
+            DNSServiceRegister(&serviceRef, 0, 0, name, regtype, nil, nil, UInt16(port).bigEndian, UInt16(record.count), txtRecordPtr, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
         }
-
         guard error == 0 else {
-            delegate?.netService(self, didNotPublish: NetServiceError.Unmapped(error))
+            didNotPublish(error: error)
             return
         }
+        start()
+    }
 
+    @available(*, deprecated)
+    public func resolve() {
+        resolve(withTimeout: 5)
+    }
+
+    //TODO: implement timeout!
+    func resolve(withTimeout timeout: TimeInterval) {
+        guard serviceRef == nil else {
+            return didNotResolve(error: -72003) // CFNetServiceErrorInProgress
+        }
+
+        delegate?.netServiceWillResolve(self)
+
+        let error = DNSServiceResolve(&serviceRef, 0, 0, name, type, domain, _resolveReply, Unmanaged.passUnretained(self).toOpaque())
+        guard error == 0 else {
+            didNotResolve(error: error)
+            return
+        }
+        start()
+    }
+
+    func start() {
         let fd = DNSServiceRefSockFD(serviceRef)
         let info = Unmanaged.passUnretained(self).toOpaque()
 
@@ -231,7 +271,8 @@ public class NetService {
     /// If the object was initialized by calling `init(domain:type:name:)`, the value of this property is not valid (`-1`) until after the service has successfully been resolved (when `addresses` is `non-nil`).
     public internal(set) var port: Int = -1
 
-    //MARK:-
+    //MARK:- Internal
+
     fileprivate func didPublish(name: String) {
         self.name = name
         delegate?.netServiceDidPublish(self)
@@ -242,6 +283,35 @@ public class NetService {
             "NSNetServicesErrorDomain": NSNumber(value: 10),
             "NSNetServicesErrorCode": NSNumber(value: error)
         ])
+    }
+
+    fileprivate func didNotResolve(error: DNSServiceErrorType) {
+        delegate?.netService(self, didNotResolve: [
+            "NSNetServicesErrorDomain": NSNumber(value: 10),
+            "NSNetServicesErrorCode": NSNumber(value: error)
+        ])
+    }
+
+    fileprivate func didResolveAddress(host: String, port: UInt16, textRecord: Data?) {
+        self.port = Int(port)
+        self.textRecord = textRecord
+
+        // resolve hostname
+        var res: UnsafeMutablePointer<addrinfo>? = nil
+        let error = getaddrinfo(host, "\(port)", nil, &res)
+        guard error == 0 else {
+            didNotResolve(error: -1)
+            return
+        }
+        defer {
+            freeaddrinfo(res)
+        }
+        var addresses = [Data]()
+        for addr in sequence(first: res!, next: { $0.pointee.ai_next }) {
+            addresses.append(Data(bytes: addr.pointee.ai_addr, count: Int(addr.pointee.ai_addrlen)))
+        }
+        self.addresses = addresses
+        delegate?.netServiceDidResolveAddress(self)
     }
 
     fileprivate func processResult() {

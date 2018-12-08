@@ -1,7 +1,14 @@
+import struct Foundation.Data
 import struct Foundation.Date
 import class Foundation.DateFormatter
 import class Foundation.NSNumber
 import NetService
+
+#if os(macOS)
+    import Darwin
+#elseif os(Linux)
+    import Glibc
+#endif
 
 class BaseDelegate {
     let timeFormatter = DateFormatter()
@@ -106,5 +113,60 @@ class RegisterServiceDelegate: BaseDelegate, NetServiceDelegate {
 
     func netServiceDidPublish(_ sender: NetService) {
         print("\(time())  Got a reply for service \(sender.name).\(sender.type).\(sender.domain): Name now registered and active")
+    }
+}
+
+class ResolveServiceDelegate: BaseDelegate, NetServiceDelegate {
+    func netServiceWillResolve(_ sender: NetService) {
+        starting()
+    }
+    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
+        print("DNSService call failed \(errorDict)")
+    }
+    func netServiceDidResolveAddress(_ sender: NetService) {
+        let addresses = sender.addresses.map(presentation)?.joined(separator: ", ") ?? "N/A"
+        print("\(time()) \(sender.name) can be reached at \(addresses) (interface ?)")
+        if let txtRecord = sender.txtRecordData() {
+            print(" \(decode(txtRecord))")
+        }
+    }
+    func presentation(_ addresses: [Data]) -> [String] {
+        var p = [String]()
+        for memory in addresses {
+            var ss = sockaddr_storage()
+            _ = memory.withUnsafeBytes {
+                memcpy(&ss, $0, memory.count)
+            }
+            let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: Int(NI_MAXHOST))
+
+            let sa_len: Int
+            switch ss.ss_family {
+            case sa_family_t(AF_INET): sa_len = MemoryLayout<sockaddr_in>.size
+            case sa_family_t(AF_INET6): sa_len = MemoryLayout<sockaddr_in6>.size
+            default: continue
+            }
+
+            _ = withUnsafePointer(to: &ss) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    getnameinfo($0, socklen_t(sa_len), buffer, socklen_t(NI_MAXHOST), nil, 0, NI_NUMERICHOST)
+                }
+            }
+            p.append(String(cString: buffer))
+        }
+        return p
+    }
+    func decode(_ txtRecord: Data) -> [String: String] {
+        var txtDictionary: [String: String] = [:]
+        var position = 0
+        while position < txtRecord.count {
+            let size = Int(txtRecord[position])
+            position += 1
+            if position + size >= txtRecord.count { break }
+            guard let label = String(bytes: txtRecord[position..<position+size], encoding: .utf8) else { break }
+            position += size
+            let (key, value) = label.split(around: "=")
+            txtDictionary[key] = value
+        }
+        return txtDictionary
     }
 }
