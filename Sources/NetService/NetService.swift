@@ -151,8 +151,6 @@ public class NetService {
     public var type: String
 
     /// Sets the TXT record for the receiver, and returns a Boolean value that indicates whether the operation was successful.
-    ///
-    /// NOTE: Differs from Cocoa implementation (uses Data instead)
     public func setTXTRecord(_ recordData: Data?) -> Bool {
         textRecord = recordData
 

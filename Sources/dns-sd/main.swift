@@ -103,11 +103,17 @@ if let browse = result.get(browse) {
 }
 
 if let register = result.get(register) {
-    guard register.count == 4, let port = Int32(register[3]) else { // key=value...
-        print("Usage: dns-sd -R <Name> <Type> <Domain> <Port>")
+    guard register.count >= 4, let port = Int32(register[3]) else { // key=value...
+        print("Usage: dns-sd -R <Name> <Type> <Domain> <Port> [<TXT>...]")
         exit(-1)
     }
     let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
+    let keyvalues : [String: String] = Dictionary(items: register.dropFirst(4).map { $0.split(around: "=") })
+    let txtRecord = NetService.data(fromTXTRecord: keyvalues)
+    guard service.setTXTRecord(txtRecord) else {
+        print("Failed to set text record")
+        exit(-1)
+    }
     let delegate = Delegate()
     service.delegate = delegate
     service.publish()
