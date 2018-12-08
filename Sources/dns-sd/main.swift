@@ -14,8 +14,10 @@ import Utility
 #endif
 
 let parser = ArgumentParser(commandName: "dns-sd", usage: "", overview: "", seeAlso: "")
-let browse = parser.add(option: "-B", kind: [String].self)
-let register = parser.add(option: "-R", kind: [String].self)
+let register = parser.add(option: "-R", kind: [String].self,
+                          usage: "<Name> <Type> <Domain> <Port> [<TXT>...]             (Register a service)")
+let browse = parser.add(option: "-B", kind: [String].self,
+                        usage: "       <Type> <Domain>                     (Browse for service instances)")
 let result = try parser.parse(Array(CommandLine.arguments.dropFirst()))
 
 class Delegate: NetServiceBrowserDelegate, NetServiceDelegate {
