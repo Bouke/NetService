@@ -1,12 +1,13 @@
 import CoreFoundation
 
 import struct Foundation.Data
+import class Foundation.NSNumber
 import Cdns_sd
 
 fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
-        service.didNotPublish(error: NetServiceError.Unmapped(errorCode))
+        service.didNotPublish(error: errorCode)
         return
     }
     let name = String(cString: name!)
@@ -97,8 +98,8 @@ public class NetService {
     ///     If you specify the `NetService.Option.listenForConnections` flag, you may pass zero (0), in which case the service automatically allocates an arbitrary (ephemeral) port for your service. When the delegate’s `netServiceDidPublish(_:)` is called, you can determine the actual port chosen by calling the service object’s `NetService` method or accessing the corresponding property.
     ///     If your app is listening for connections on its own, the value of port must be a port number acquired by your application for the service.
     public init(domain: String, type: String, name: String, port: Int32) {
-        precondition(domain == "local.", "only local. domain is supported")
-        precondition(type.hasSuffix("."), "type label(s) should end with a period")
+//        precondition(domain == "local.", "only local. domain is supported")
+//        precondition(type.hasSuffix("."), "type label(s) should end with a period")
         precondition(port >= -1 && port <= 65535, "Port should be in the range 0-65535")
 
         self.domain = domain
@@ -238,8 +239,11 @@ public class NetService {
         delegate?.netServiceDidPublish(self)
     }
 
-    fileprivate func didNotPublish(error: NetServiceError) {
-        delegate?.netService(self, didNotPublish: error)
+    fileprivate func didNotPublish(error: DNSServiceErrorType) {
+        delegate?.netService(self, didNotPublish: [
+            "NSNetServicesErrorDomain": NSNumber(value: 10),
+            "NSNetServicesErrorCode": NSNumber(value: error)
+        ])
     }
 
     fileprivate func processResult() {

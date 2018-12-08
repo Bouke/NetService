@@ -1,6 +1,7 @@
 import struct Foundation.Date
 import class Foundation.DateFormatter
 import class Foundation.DispatchQueue
+import class Foundation.NSNumber
 import class Foundation.RunLoop
 import NetService
 import Utility
@@ -49,8 +50,8 @@ class BrowserDelegate: NetServiceBrowserDelegate {
         print("Timestamp     A/R    Flags  if Domain               Service Type         Instance Name")
     }
 
-    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch error: NetServiceError) {
-        print("\(error)")
+    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
+        print("Did not search: \(errorDict)")
     }
 }
 

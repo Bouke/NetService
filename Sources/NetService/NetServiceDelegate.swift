@@ -1,3 +1,5 @@
+import class Foundation.NSNumber
+
 /// The `NetServiceDelegate` protocol defines the optional methods implemented by delegates of `NetService` objects.
 public protocol NetServiceDelegate: class {
 
@@ -18,7 +20,7 @@ public protocol NetServiceDelegate: class {
     ///   - sender: The service that could not be published.
     ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys NSNetServicesErrorCode and NSNetServicesErrorDomain.</s>
     func netService(_ sender: NetService,
-                    didNotPublish error: NetServiceError)
+                    didNotPublish errorDict: [String : NSNumber])
 
     /// Notifies the delegate that a service was successfully published.
     ///

@@ -3,12 +3,13 @@
 import CoreFoundation
 
 import struct Foundation.Data
+import class Foundation.NSNumber
 import Cdns_sd
 
 fileprivate let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interfaceIndex, errorCode, name, regtype, domain, context) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
-        browser.didNotSearch(error: NetServiceError.Unmapped(errorCode))
+        browser.didNotSearch(error: errorCode)
         return
     }
     let name = String(cString: name!)
@@ -91,7 +92,7 @@ public class NetServiceBrowser {
         let error = DNSServiceBrowse(&serviceRef, 0, 0, type, nil, _browseCallback, Unmanaged.passUnretained(self).toOpaque())
 
         guard error == 0 else {
-            delegate?.netServiceBrowser(self, didNotSearch: NetServiceError.Unmapped(error))
+            didNotSearch(error: error)
             return
         }
 
@@ -122,8 +123,11 @@ public class NetServiceBrowser {
         delegate?.netServiceBrowserDidStopSearch(self)
     }
 
-    func didNotSearch(error: NetServiceError) {
-        delegate?.netServiceBrowser(self, didNotSearch: error)
+    func didNotSearch(error: DNSServiceErrorType) {
+        delegate?.netServiceBrowser(self, didNotSearch: [
+            "NSNetServicesErrorDomain": NSNumber(value: 10),
+            "NSNetServicesErrorCode": NSNumber(value: error)
+        ])
     }
 
     func didFind(service: NetService, moreComing: Bool) {

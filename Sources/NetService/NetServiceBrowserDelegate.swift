@@ -1,3 +1,5 @@
+import class Foundation.NSNumber
+
 /// The `NetServiceBrowserDelegate` protocol defines the optional methods implemented by delegates of `NetServiceBrowser` objects.
 public protocol NetServiceBrowserDelegate: class {
     /// Tells the delegate the sender found a domain.
@@ -65,7 +67,7 @@ public protocol NetServiceBrowserDelegate: class {
     ///   - browser: Sender of this delegate message.
     ///   - error: An `Error` with the reasons the search was unsuccessful. <s>Use the dictionary keys errorCode and errorDomain to retrieve the error information from the dictionary.</s>
     func netServiceBrowser(_ browser: NetServiceBrowser,
-                           didNotSearch error: NetServiceError)
+                           didNotSearch error: [String: NSNumber])
 
     /// Tells the delegate that a search was stopped.
     ///
@@ -87,7 +89,7 @@ public extension NetServiceBrowserDelegate {
     func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) { }
 
     func netServiceBrowser(_ browser: NetServiceBrowser,
-                           didNotSearch error: NetServiceError) { }
+                           didNotSearch error: [String: NSNumber]) { }
 
     func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) { }
 }
