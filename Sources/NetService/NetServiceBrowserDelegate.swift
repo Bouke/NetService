@@ -10,9 +10,9 @@ public protocol NetServiceBrowserDelegate: class {
     ///   - browser: Sender of this delegate message.
     ///   - domainString: Name of the domain found by `browser`.
     ///   - moreComing: `true` when `browser` is waiting for additional domains. `false` when there are no additional domains.
-    //    func netServiceBrowser(_ browser: NetServiceBrowser,
-    //                           didFindDomain domainString: String,
-    //                           moreComing: Bool)
+    func netServiceBrowser(_ browser: NetServiceBrowser,
+                           didFindDomain domainString: String,
+                           moreComing: Bool)
 
     /// Tells the delegate the a domain has disappeared or has become unavailable.
     ///
@@ -22,9 +22,9 @@ public protocol NetServiceBrowserDelegate: class {
     ///   - browser: Sender of this delegate message.
     ///   - domainString: Name of the domain that became unavailable.
     ///   - moreComing: `true` when `browser` is waiting for additional domains. `false` when there are no additional domains.
-    //    func netServiceBrowser(_ browser: NetServiceBrowser,
-    //                           didRemoveDomain domainString: String,
-    //                           moreComing: Bool)
+    func netServiceBrowser(_ browser: NetServiceBrowser,
+                           didRemoveDomain domainString: String,
+                           moreComing: Bool)
 
     /// Tells the delegate the sender found a service.
     ///
@@ -78,6 +78,14 @@ public protocol NetServiceBrowserDelegate: class {
 }
 
 public extension NetServiceBrowserDelegate {
+    func netServiceBrowser(_ browser: NetServiceBrowser,
+                           didFindDomain domainString: String,
+                           moreComing: Bool) { }
+
+    func netServiceBrowser(_ browser: NetServiceBrowser,
+                           didRemoveDomain domainString: String,
+                           moreComing: Bool) { }
+
     func netServiceBrowser(_ browser: NetServiceBrowser,
                            didFind service: NetService,
                            moreComing: Bool) { }

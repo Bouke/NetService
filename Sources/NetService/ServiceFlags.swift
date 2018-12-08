@@ -14,4 +14,6 @@ struct ServiceFlags: OptionSet {
 
     public static let moreComing = ServiceFlags(rawValue: DNSServiceFlags(kDNSServiceFlagsMoreComing))
     public static let add = ServiceFlags(rawValue: DNSServiceFlags(kDNSServiceFlagsAdd))
+    public static let browseDomains = ServiceFlags(rawValue: DNSServiceFlags(kDNSServiceFlagsBrowseDomains))
+    public static let registrationDomains = ServiceFlags(rawValue: DNSServiceFlags(kDNSServiceFlagsRegistrationDomains))
 }

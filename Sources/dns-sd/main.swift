@@ -1,7 +1,6 @@
+import struct Foundation.Data
 import struct Foundation.Date
-import class Foundation.DateFormatter
 import class Foundation.DispatchQueue
-import class Foundation.NSNumber
 import class Foundation.RunLoop
 import NetService
 import Utility
@@ -14,72 +13,15 @@ import Utility
 #endif
 
 let parser = ArgumentParser(commandName: "dns-sd", usage: "", overview: "", seeAlso: "")
+let enumerateRegistrationDomains = parser.add(option: "-E", kind: Bool.self,
+                                              usage: "                             (Enumerate recommended registration domains)")
+let enumerateBrowsingDomains = parser.add(option: "-F", kind: Bool.self,
+                                          usage: "                                 (Enumerate recommended browsing domains)")
 let register = parser.add(option: "-R", kind: [String].self,
                           usage: "<Name> <Type> <Domain> <Port> [<TXT>...]             (Register a service)")
 let browse = parser.add(option: "-B", kind: [String].self,
                         usage: "       <Type> <Domain>                     (Browse for service instances)")
 let result = try parser.parse(Array(CommandLine.arguments.dropFirst()))
-
-class Delegate: NetServiceBrowserDelegate, NetServiceDelegate {
-    let timeFormatter = DateFormatter()
-    let dateFormatter = DateFormatter()
-
-    init() {
-        timeFormatter.dateFormat = "HH:mm:ss.sss"
-        dateFormatter.dateStyle = .full
-    }
-
-    func time() -> String {
-        return timeFormatter.string(from: Date())
-    }
-
-    func date() -> String {
-        return dateFormatter.string(from: Date())
-    }
-
-    //MARK:- NetServiceBrowserDelegate
-
-    func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        print(time() +
-            "  Add        ?   ? " +
-            service.domain.padding(toLength: 21, withPad: " ", startingAt: 0) +
-            service.type.padding(toLength: 21, withPad: " ", startingAt: 0) +
-            service.name)
-    }
-
-    func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
-        print(time() +
-            "  Remove     ?   ? " +
-            service.domain.padding(toLength: 21, withPad: " ", startingAt: 0) +
-            service.type.padding(toLength: 21, withPad: " ", startingAt: 0) +
-            service.name)
-    }
-
-    func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
-        print("DATE: ---\(date())---")
-        print("\(time())  ...STARTING...")
-        print("Timestamp     A/R    Flags  if Domain               Service Type         Instance Name")
-    }
-
-    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
-        print("Did not search: \(errorDict)")
-    }
-
-    //MARK:- NetServiceDelegate
-
-    func netServiceWillPublish(_ sender: NetService) {
-        print("DATE: ---\(date())---")
-        print("\(time())  ...STARTING...")
-    }
-
-    func netServiceDidPublish(_ sender: NetService) {
-        print("\(time())  Got a reply for service \(sender.name).\(sender.type).\(sender.domain): Name now registered and active")
-    }
-
-    func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
-        print("DNSService call failed \(errorDict)")
-    }
-}
 
 var keepRunning = true
 signal(SIGINT) { _ in
@@ -88,14 +30,26 @@ signal(SIGINT) { _ in
     }
 }
 
-if let browse = result.get(browse) {
-    print("Browsing for \(browse[0])")
+if result.get(enumerateRegistrationDomains) != nil {
+    print("Looking for recommended registration domains:")
     let browser = NetServiceBrowser()
-    let delegate = Delegate()
+    let delegate = EnumerateRegistrationDomainsDelegate()
     browser.delegate = delegate
-    let serviceType = browse[0]
-    let domain = browse.count == 2 ? browse[1] : "local."
-    browser.searchForServices(ofType: serviceType, inDomain: domain)
+    browser.searchForRegistrationDomains()
+    withExtendedLifetime([browser, delegate]) {
+        while keepRunning {
+            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+        }
+    }
+    browser.stop()
+}
+
+if result.get(enumerateBrowsingDomains) != nil {
+    print("Looking for recommended browsing domains:")
+    let browser = NetServiceBrowser()
+    let delegate = EnumerateBrowsingDomainsDelegate()
+    browser.delegate = delegate
+    browser.searchForBrowsableDomains()
     withExtendedLifetime([browser, delegate]) {
         while keepRunning {
             _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
@@ -110,13 +64,16 @@ if let register = result.get(register) {
         exit(-1)
     }
     let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
-    let keyvalues : [String: String] = Dictionary(items: register.dropFirst(4).map { $0.split(around: "=") })
+    let keyvalues : [String: Data] = Dictionary(items: register.dropFirst(4).map {
+        let (key, value) = $0.split(around: "=")
+        return (key, value!.data(using: .utf8)!)
+    })
     let txtRecord = NetService.data(fromTXTRecord: keyvalues)
     guard service.setTXTRecord(txtRecord) else {
         print("Failed to set text record")
         exit(-1)
     }
-    let delegate = Delegate()
+    let delegate = RegisterServiceDelegate()
     service.delegate = delegate
     service.publish()
     withExtendedLifetime([service, delegate]) {
@@ -125,4 +82,20 @@ if let register = result.get(register) {
         }
     }
     service.stop()
+}
+
+if let browse = result.get(browse) {
+    print("Browsing for \(browse[0])")
+    let browser = NetServiceBrowser()
+    let delegate = BrowseServicesDelegate()
+    browser.delegate = delegate
+    let serviceType = browse[0]
+    let domain = browse.count == 2 ? browse[1] : "local."
+    browser.searchForServices(ofType: serviceType, inDomain: domain)
+    withExtendedLifetime([browser, delegate]) {
+        while keepRunning {
+            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+        }
+    }
+    browser.stop()
 }

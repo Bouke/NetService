@@ -29,6 +29,21 @@ fileprivate let _processResult: CFSocketCallBack = { (s, type, address, data, in
     browser.processResult()
 }
 
+fileprivate let _enumDomainsReply: DNSServiceDomainEnumReply = { (sdRef, flags, interfaceIndex, errorCode, replyDomain, context) in
+    let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
+    guard errorCode == kDNSServiceErr_NoError else {
+        browser.didNotSearch(error: errorCode)
+        return
+    }
+    let flags = ServiceFlags(rawValue: flags)
+    let domain = String(cString: replyDomain!)
+    if flags.contains(.add) {
+        browser.didFind(domain: domain, moreComing: flags.contains(.moreComing))
+    } else {
+        browser.didRemove(domain: domain, moreComing: flags.contains(.moreComing))
+    }
+}
+
 /// The NSNetServiceBrowser class defines an interface for finding published services on a network using multicast DNS. An instance of NSNetServiceBrowser is known as a network service browser.
 ///
 /// Services can range from standard services, such as HTTP and FTP, to custom services defined by other applications. You can use a network service browser in your code to obtain the list of accessible domains and then to obtain an `NetService` object for each discovered service. Each network service browser performs one search at a time, so if you want to perform multiple simultaneous searches, use multiple network service browsers.
@@ -59,6 +74,38 @@ public class NetServiceBrowser {
 
     // MARK: Using Network Service Browsers
 
+    /// Initiates a search for domains visible to the host. This method returns
+    /// immediately.
+    ///
+    /// The delegate receives a `netServiceBrowser(_:didFindDomain:moreComing:)`
+    /// message for each domain discovered.
+    ///
+    /// Implementers note: Apple's documentation doesn't mention that
+    /// a `netServiceBrowserWillSearch(_:)` will be sent to the delegate, but the
+    /// actual implementation from Apple does, and thus this implementation does
+    /// as well.
+    public func searchForBrowsableDomains() {
+        browse {
+            DNSServiceEnumerateDomains(&serviceRef, ServiceFlags.browseDomains.rawValue, 0, _enumDomainsReply, Unmanaged.passUnretained(self).toOpaque())
+        }
+    }
+
+    /// Initiates a search for domains in which the host may register services.
+    ///
+    /// This method returns immediately, sending a `netServiceBrowserWillSearch(_:)`
+    /// message to the delegate if the network was ready to initiate the search.
+    /// The delegate receives a subsequent `netServiceBrowser(_:didFindDomain:moreComing:)`
+    /// message for each domain discovered.
+    ///
+    /// Most network service browser clients do not have to use this method—it
+    /// is sufficient to publish a service with the empty string, which registers
+    /// it in any available registration domains automatically.
+    public func searchForRegistrationDomains() {
+        browse {
+            DNSServiceEnumerateDomains(&serviceRef, ServiceFlags.registrationDomains.rawValue, 0, _enumDomainsReply, Unmanaged.passUnretained(self).toOpaque())
+        }
+    }
+
     /// Starts a search for services of a particular type within a specific domain.
     ///
     /// - Parameters:
@@ -84,17 +131,30 @@ public class NetServiceBrowser {
     /// empty string for the domainName argument when publishing or browsing a
     /// service, but do not rely on this for resolution.</s>
     public func searchForServices(ofType type: String, inDomain domain: String) {
-        assert(serviceRef == nil, "Already browsing")
-//        assert(domain == "local.", "only local. domain is supported")
-//        assert(type.hasSuffix("."), "type label(s) should end with a period")
+        guard serviceRef == nil else {
+            return didNotSearch(error: -72003) // CFNetServiceErrorInProgress
+        }
+        assert(domain == "", "Only empty domain supported for now (all domains)")
+        browse {
+            DNSServiceBrowse(&serviceRef, 0, 0, type, nil, _browseCallback, Unmanaged.passUnretained(self).toOpaque())
+        }
+    }
+
+    func browse(setup: () -> DNSServiceErrorType) {
         delegate?.netServiceBrowserWillSearch(self)
 
-        let error = DNSServiceBrowse(&serviceRef, 0, 0, type, nil, _browseCallback, Unmanaged.passUnretained(self).toOpaque())
+        let error = setup()
 
         guard error == 0 else {
             didNotSearch(error: error)
             return
         }
+
+        start()
+    }
+
+    func start() {
+        assert(serviceRef != nil, "serviceRef should've been set already")
 
         let fd = DNSServiceRefSockFD(serviceRef)
         let info = Unmanaged.passUnretained(self).toOpaque()
@@ -123,6 +183,8 @@ public class NetServiceBrowser {
         delegate?.netServiceBrowserDidStopSearch(self)
     }
 
+    //MARK:- Internal
+
     func didNotSearch(error: DNSServiceErrorType) {
         delegate?.netServiceBrowser(self, didNotSearch: [
             "NSNetServicesErrorDomain": NSNumber(value: 10),
@@ -136,6 +198,14 @@ public class NetServiceBrowser {
 
     func didRemove(service: NetService, moreComing: Bool) {
         delegate?.netServiceBrowser(self, didRemove: service, moreComing: moreComing)
+    }
+
+    func didFind(domain: String, moreComing: Bool) {
+        delegate?.netServiceBrowser(self, didFindDomain: domain, moreComing: moreComing)
+    }
+
+    func didRemove(domain: String, moreComing: Bool) {
+        delegate?.netServiceBrowser(self, didRemoveDomain: domain, moreComing: moreComing)
     }
 
     fileprivate func processResult() {
