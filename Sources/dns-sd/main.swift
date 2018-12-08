@@ -15,19 +15,27 @@ import Utility
 
 let parser = ArgumentParser(commandName: "dns-sd", usage: "", overview: "", seeAlso: "")
 let browse = parser.add(option: "-B", kind: [String].self)
+let register = parser.add(option: "-R", kind: [String].self)
 let result = try parser.parse(Array(CommandLine.arguments.dropFirst()))
 
-class BrowserDelegate: NetServiceBrowserDelegate {
-    let timeFormatter: DateFormatter
+class Delegate: NetServiceBrowserDelegate, NetServiceDelegate {
+    let timeFormatter = DateFormatter()
+    let dateFormatter = DateFormatter()
 
     init() {
-        timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "HH:mm:ss.sss"
+        dateFormatter.dateStyle = .full
     }
 
     func time() -> String {
         return timeFormatter.string(from: Date())
     }
+
+    func date() -> String {
+        return dateFormatter.string(from: Date())
+    }
+
+    //MARK:- NetServiceBrowserDelegate
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         print(time() +
@@ -46,12 +54,28 @@ class BrowserDelegate: NetServiceBrowserDelegate {
     }
 
     func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
+        print("DATE: ---\(date())---")
         print("\(time())  ...STARTING...")
         print("Timestamp     A/R    Flags  if Domain               Service Type         Instance Name")
     }
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
         print("Did not search: \(errorDict)")
+    }
+
+    //MARK:- NetServiceDelegate
+
+    func netServiceWillPublish(_ sender: NetService) {
+        print("DATE: ---\(date())---")
+        print("\(time())  ...STARTING...")
+    }
+
+    func netServiceDidPublish(_ sender: NetService) {
+        print("\(time())  Got a reply for service \(sender.name).\(sender.type).\(sender.domain): Name now registered and active")
+    }
+
+    func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
+        print("DNSService call failed \(errorDict)")
     }
 }
 
@@ -65,7 +89,7 @@ signal(SIGINT) { _ in
 if let browse = result.get(browse) {
     print("Browsing for \(browse[0])")
     let browser = NetServiceBrowser()
-    let delegate = BrowserDelegate()
+    let delegate = Delegate()
     browser.delegate = delegate
     let serviceType = browse[0]
     let domain = browse.count == 2 ? browse[1] : "local."
@@ -78,3 +102,19 @@ if let browse = result.get(browse) {
     browser.stop()
 }
 
+if let register = result.get(register) {
+    guard register.count == 4, let port = Int32(register[3]) else { // key=value...
+        print("Usage: dns-sd -R <Name> <Type> <Domain> <Port>")
+        exit(-1)
+    }
+    let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
+    let delegate = Delegate()
+    service.delegate = delegate
+    service.publish()
+    withExtendedLifetime([service, delegate]) {
+        while keepRunning {
+            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+        }
+    }
+    service.stop()
+}
