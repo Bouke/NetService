@@ -134,7 +134,10 @@ class ResolveServiceDelegate: BaseDelegate, NetServiceDelegate {
         let addresses = sender.addresses.map(presentation)?.joined(separator: ", ") ?? "N/A"
         print("\(time()) \(sender.name) can be reached at \(addresses) (interface ?)")
         if let txtRecord = sender.txtRecordData() {
-            print(" \(decode(txtRecord))")
+            let txtDictionary = NetService.dictionary(fromTXTRecord: txtRecord).map {
+                ($0, String(data: $1, encoding: .utf8)!)
+            }
+            print(" \(Dictionary(items: txtDictionary))")
         }
     }
     func presentation(_ addresses: [Data]) -> [String] {
@@ -161,19 +164,5 @@ class ResolveServiceDelegate: BaseDelegate, NetServiceDelegate {
             p.append(String(cString: buffer))
         }
         return p
-    }
-    func decode(_ txtRecord: Data) -> [String: String] {
-        var txtDictionary: [String: String] = [:]
-        var position = 0
-        while position < txtRecord.count {
-            let size = Int(txtRecord[position])
-            position += 1
-            if position + size >= txtRecord.count { break }
-            guard let label = String(bytes: txtRecord[position..<position+size], encoding: .utf8) else { break }
-            position += size
-            let (key, value) = label.split(around: "=")
-            txtDictionary[key] = value
-        }
-        return txtDictionary
     }
 }

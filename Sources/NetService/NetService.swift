@@ -1,14 +1,18 @@
 import CoreFoundation
 
 import struct Foundation.Data
+import class Foundation.InputStream
+import class Foundation.OutputStream
 import class Foundation.NSNumber
+import class Foundation.RunLoop
 import struct Foundation.TimeInterval
+
 import Cdns_sd
 
 fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
-        service.didNotPublish(error: errorCode)
+        service.didNotPublish(error: Int(errorCode))
         return
     }
     let name = String(cString: name!)
@@ -27,7 +31,7 @@ fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, er
 fileprivate let _resolveReply: DNSServiceResolveReply = { sdRef, flags, interfaceIndex, errorCode, fullname, hosttarget, port, txtLen, txtRecord, context in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
-        service.didNotResolve(error: errorCode)
+        service.didNotResolve(error: Int(errorCode))
         return
     }
     let hosttarget = String(cString: hosttarget!)
@@ -52,24 +56,6 @@ public class NetService {
     private var textRecord: Data? = nil
     private var socket: CFSocket? = nil
     private var source: CFRunLoopSource? = nil
-
-    /// These constants specify options for a network service.
-    public struct Options: OptionSet {
-        public let rawValue: Int
-        public init(rawValue: Int) {
-            self.rawValue = rawValue
-        }
-
-        /// Specifies that the network service should not rename itself in the event of a name collision.
-        public static let noAutoRename = Options(rawValue: 1)
-
-        /// Specifies that a TCP listener should be started for both IPv4 and IPv6 on the port specified by this service. If the listening port can't be opened, the service calls its delegate’s `netService(_:didNotPublish:)` method to report the error.
-        ///
-        /// The listener supports only TCP connections. <s>If the service’s type does not end with _tcp, publication fails with badArgumentError.</s>
-        ///
-        /// Whenever a client connects to the listening socket, the service calls its delegate’s `netService(_:didAcceptConnectionWith:outputStream:)` method with a `Socket` object.
-        public static let listenForConnections = Options(rawValue: 2)
-    }
 
     // MARK: Creating Network Services
 
@@ -113,8 +99,6 @@ public class NetService {
     ///     If you specify the `NetService.Option.listenForConnections` flag, you may pass zero (0), in which case the service automatically allocates an arbitrary (ephemeral) port for your service. When the delegate’s `netServiceDidPublish(_:)` is called, you can determine the actual port chosen by calling the service object’s `NetService` method or accessing the corresponding property.
     ///     If your app is listening for connections on its own, the value of port must be a port number acquired by your application for the service.
     public init(domain: String, type: String, name: String, port: Int32) {
-//        precondition(domain == "local.", "only local. domain is supported")
-//        precondition(type.hasSuffix("."), "type label(s) should end with a period")
         precondition(port >= -1 && port <= 65535, "Port should be in the range 0-65535")
 
         self.domain = domain
@@ -126,6 +110,13 @@ public class NetService {
 
     // MARK: Configuring Network Services
 
+    /// Returns an NSData object representing a TXT record formed from a given dictionary.
+    ///
+    /// - Parameters:
+    ///   - txtDictionary: A dictionary containing a TXT record.
+    ///
+    /// - Return Value:
+    ///   An NSData object representing TXT data formed from txtDictionary. Fails an assertion if txtDictionary cannot be represented as an NSData object.
     public class func data(fromTXTRecord txtDictionary: [String : Data]) -> Data {
         return txtDictionary.reduce(Data()) {
             let attr = "\($1.key)=".utf8 + $1.value
@@ -133,12 +124,29 @@ public class NetService {
         }
     }
 
-    // EXTRA!
-    public class func data(fromTXTRecord txtDictionary: [String : String]) -> Data {
-        return txtDictionary.reduce(Data()) {
-            let attr = "\($1.key)=\($1.value)".utf8
-            return $0 + Data([UInt8(attr.count)]) + Data(attr)
+    /// Returns a dictionary representing a TXT record given as an NSData object.
+    ///
+    /// - Parameters:
+    ///   - txtData: A data object encoding a TXT record.
+    ///
+    /// - Return Value:
+    /// A dictionary representing txtData. The dictionary’s keys are NSString objects using UTF8 encoding. The values associated with all the dictionary’s keys are NSData objects that encapsulate strings or data.
+    ///
+    /// Fails an assertion if txtData cannot be represented as an NSDictionary object.
+    public class func dictionary(fromTXTRecord txtData: Data) -> [String : Data] {
+        var txtDictionary: [String: Data] = [:]
+        var position = 0
+        while position < txtData.count {
+            let size = Int(txtData[position])
+            position += 1
+            if position + size >= txtData.count { break }
+            guard let label = String(bytes: txtData[position..<position+size], encoding: .utf8) else { break }
+            position += size
+            let parts = label.split(separator: "=", maxSplits: 1)
+            assert(parts.count == 2, "Only key=value parts are supported")
+            txtDictionary[String(parts[0])] = parts[1].data(using: .utf8)
         }
+        return txtDictionary
     }
 
     /// A read-only array containing `NSData` objects, each of which contains a socket address for the service.
@@ -155,6 +163,32 @@ public class NetService {
     /// This property’s value is set when the object is first initialized, whether by your code or by a browser object. See `init(domain:type:name:)` for more information.
     public var domain: String
 
+    /// Specifies whether to also publish, resolve, or monitor this service over peer-to-peer Bluetooth and Wi-Fi, if available. `false` by default.
+    ///
+    /// This property must be set before calling `publish()` or `publish(options:)`, `resolve(withTimeout:)`, or `startMonitoring()` in order to take effect.
+    public var includedPeerToPeer: Bool {
+        get { NSUnimplemented() }
+        set { NSUnimplemented() }
+    }
+
+    /// Creates a pair of input and output streams for the receiver and returns a Boolean value that indicates whether they were retrieved successfully.
+    ///
+    /// - Parameters:
+    ///   - inputStream: Upon return, the input stream for the receiver. Pass NULL if you do not need this stream.
+    ///   - outputStream: Upon return, the output stream for the receiver. Pass NULL if you do not need this stream.
+    ///
+    /// - Return Value:
+    /// true if the streams are created successfully, otherwise `false`.
+    ///
+    /// - Discussion:
+    /// After this method is called, no delegate callbacks are called by the receiver.
+    ///
+    /// - Note:
+    /// If automatic reference counting is not used, the input and output streams returned through the parameters are <s>retained</s>, which means that you are responsible for releasing them to avoid memory leaks.
+    func getInputStream(_ inputStream: UnsafeMutablePointer<InputStream?>?, outputStream: UnsafeMutablePointer<OutputStream?>?) -> Bool {
+        NSUnimplemented()
+    }
+
     /// A string containing the name of this service.
     ///
     /// This value is set when the object is first initialized, whether by your code or by a browser object. See `init(domain:type:name:)` for more information.
@@ -165,14 +199,20 @@ public class NetService {
     /// This value is set when the object is first initialized, whether by your code or by a browser object. See `init(domain:type:name:)` for more information.
     public var type: String
 
+    /// Returns the TXT record for the receiver.
     public func txtRecordData() -> Data? {
         return textRecord
     }
 
     /// Sets the TXT record for the receiver, and returns a Boolean value that indicates whether the operation was successful.
+    ///
+    /// - Parameters:
+    ///   - recordData: The TXT record for the receiver.
+    ///
+    /// - Return Value:
+    /// `true` if `recordData` is successfully set as the TXT record, otherwise `false`.
     public func setTXTRecord(_ recordData: Data?) -> Bool {
         textRecord = recordData
-
         if let serviceRef = serviceRef {
             var record = textRecord ?? Data([0])
             let error = record.withUnsafeBytes { txtRecordPtr in
@@ -182,7 +222,6 @@ public class NetService {
                 return false
             }
         }
-
         return true
     }
 
@@ -193,12 +232,51 @@ public class NetService {
 
     // MARK: Managing Run Loops
 
+    /// Adds the service to the specified run loop.
+    ///
+    /// - Parameters:
+    ///   - aRunLoop: The run loop to which to add the receiver.
+    ///   - mode: The run loop mode to which to add the receiver. Possible values for mode are discussed in the "Constants" section of RunLoop.
+    ///
+    /// You can use this method in conjunction with remove(from:forMode:) to transfer a service to a different run loop. You should not attempt to run a service on multiple run loops.
+    ///
+    /// Not implemented.
+    public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+        NSUnimplemented()
+    }
+
+    /// Removes the service from the given run loop for a given mode.
+    ///
+    /// - Parameters
+    ///   - aRunLoop: The run loop from which to remove the receiver.
+    ///   - mode: The run loop mode from which to remove the receiver. Possible values for mode are discussed in the "Constants" section of RunLoop.
+    ///
+    /// You can use this method in conjunction with schedule(in:forMode:) to transfer the service to a different run loop. Although it is possible to remove an NSNetService object completely from any run loop and then attempt actions on it, it is an error to do so.
+    ///
+    /// Not implemented.
+    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+        NSUnimplemented()
+    }
 
     // MARK: Using Network Services
 
-    public func publish(options: Options = []) {
+    /// Attempts to advertise the receiver’s on the network.
+    ///
+    /// This method returns immediately, with success or failure indicated by the callbacks to the delegate. This is equivalent to calling `publish(options:)` with the default options (`0`).
+    public func publish() {
+        publish(options: [])
+    }
+
+    /// Attempts to advertise the receiver on the network, with the given options.
+    ///
+    /// - Parameters:
+    ///   - serviceOptions: Options for the receiver. The supported options are described in NetService.Options.
+    ///
+    /// - Discussion:
+    /// This method returns immediately, with success or failure indicated by the callbacks to the delegate.
+    public func publish(options: Options) {
         guard serviceRef == nil else {
-            return didNotPublish(error: -72003) // CFNetServiceErrorInProgress
+            return didNotPublish(error: ErrorCode.activityInProgress.rawValue)
         }
 
         delegate?.netServiceWillPublish(self)
@@ -212,28 +290,44 @@ public class NetService {
             DNSServiceRegister(&serviceRef, 0, 0, name, regtype, nil, nil, UInt16(port).bigEndian, UInt16(record.count), txtRecordPtr, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
         }
         guard error == 0 else {
-            didNotPublish(error: error)
+            didNotPublish(error: Int(error))
             return
         }
         start()
     }
 
+    /// Starts a resolve process for the service.
+    ///
+    /// - Deprecated:
+    /// Use resolve(withTimeout:) instead.
+    ///
+    /// Discussion
+    /// Attempts to determine at least one address for the service. This method returns immediately, with success or failure indicated by the callbacks to the delegate.
+    ///
+    /// In OS X v10.4, this method calls `resolve(withTimeout:)` with a timeout value of 5.
     @available(*, deprecated)
     public func resolve() {
         resolve(withTimeout: 5)
     }
 
+    /// Starts a resolve process of a finite duration for the service.
+    ///
+    /// - Parameters:
+    ///   - timeout: The maximum number of seconds to attempt a resolve. A value of 0.0 indicates no timeout and a resolve process of indefinite duration.
+    ///
+    /// - Discussion:
+    /// During the resolve period, the service sends `netServiceDidResolveAddress(_:)` to the delegate for each address it discovers that matches the service parameters. Once the timeout is hit, the service sends `netServiceDidStop(_:)` to the delegate. If no addresses resolve during the timeout period, the service sends `netService(_:didNotResolve:)` to the delegate.
     //TODO: implement timeout!
     public func resolve(withTimeout timeout: TimeInterval) {
         guard serviceRef == nil else {
-            return didNotResolve(error: -72003) // CFNetServiceErrorInProgress
+            return didNotResolve(error: ErrorCode.activityInProgress.rawValue)
         }
 
         delegate?.netServiceWillResolve(self)
 
         let error = DNSServiceResolve(&serviceRef, 0, 0, name, type, domain, _resolveReply, Unmanaged.passUnretained(self).toOpaque())
         guard error == 0 else {
-            didNotResolve(error: error)
+            didNotResolve(error: Int(error))
             return
         }
         start()
@@ -256,6 +350,21 @@ public class NetService {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes)
     }
 
+    /// The port on which the service is listening for connections.
+    ///
+    /// If the object was initialized by calling `init(domain:type:name:port:)` (whether by your code or by a browser object), then the value was set when the object was first initialized.
+    ///
+    /// If the object was initialized by calling `init(domain:type:name:)`, the value of this property is not valid (`-1`) until after the service has successfully been resolved (when `addresses` is `non-nil`).
+    public internal(set) var port: Int = -1
+
+    /// Starts the monitoring of TXT-record updates for the receiver.
+    ///
+    /// - Discussion:
+    /// The delegate must implement `netService(_:didUpdateTXTRecord:)`, which is called when the TXT record for the receiver is updated.
+    public func startMonitoring() {
+        NSUnimplemented()
+    }
+
     public func stop() {
         assert(serviceRef != nil, "Service already stopped")
         CFRunLoopSourceInvalidate(source)
@@ -264,12 +373,75 @@ public class NetService {
         delegate?.netServiceDidStop(self)
     }
 
-    /// The port on which the service is listening for connections.
+    /// Stops the monitoring of TXT-record updates for the receiver.
+    public func stopMonitoring() {
+        NSUnimplemented()
+    }
+
+    // MARK: Using Network Services
+
+    /// A string containing the DNS hostname for this service.
     ///
-    /// If the object was initialized by calling `init(domain:type:name:port:)` (whether by your code or by a browser object), then the value was set when the object was first initialized.
+    /// - Discussion:
+    /// This value is `nil` until the service has been resolved (when `addresses` is non-nil).
+    public internal(set) var hostName: String?
+
+    // MARK: Constants
+
+    /// NSNetServices Errors
     ///
-    /// If the object was initialized by calling `init(domain:type:name:)`, the value of this property is not valid (`-1`) until after the service has successfully been resolved (when `addresses` is `non-nil`).
-    public internal(set) var port: Int = -1
+    /// If an error occurs, the delegate error-handling methods return a dictionary with the following keys.
+
+    /// This key identifies the error that occurred during the most recent operation.
+    public static let errorCode = "NSNetServicesErrorCode"
+
+    /// This key identifies the originator of the error, which is either the `NSNetService` object or the mach network layer. For most errors, you should not need the value provided by this key.
+    public static let errorDomain = "NSNetServicesErrorDomain"
+
+    /// These constants identify errors that can occur when accessing net services.
+    public enum ErrorCode: Int {
+        /// An unknown error occurred.
+        case unknownError = -72000
+
+        /// The service could not be published because the name is already in use. The name could be in use locally or on another system.
+        case collisionError = -72001
+
+        /// The service could not be found on the network.
+        case notFoundError = -72002
+
+        /// The net service cannot process the request at this time. No additional information about the network state is known.
+        case activityInProgress = -72003
+
+        /// An invalid argument was used when creating the `NSNetService` object.
+        case badArgumentError = -72004
+
+        /// The client canceled the action.
+        case cancelledError = -72005
+
+        /// The net service was improperly configured.
+        case invalidError = -72006
+
+        /// The net service has timed out.
+        case timeoutError = -72007
+    }
+
+    /// These constants specify options for a network service.
+    public struct Options: OptionSet {
+        public let rawValue: Int
+        public init(rawValue: Int) {
+            self.rawValue = rawValue
+        }
+
+        /// Specifies that the network service should not rename itself in the event of a name collision.
+        public static let noAutoRename = Options(rawValue: 1)
+
+        /// Specifies that a TCP listener should be started for both IPv4 and IPv6 on the port specified by this service. If the listening port can't be opened, the service calls its delegate’s `netService(_:didNotPublish:)` method to report the error.
+        ///
+        /// The listener supports only TCP connections. <s>If the service’s type does not end with _tcp, publication fails with badArgumentError.</s>
+        ///
+        /// Whenever a client connects to the listening socket, the service calls its delegate’s `netService(_:didAcceptConnectionWith:outputStream:)` method with a `Socket` object.
+        public static let listenForConnections = Options(rawValue: 2)
+    }
 
     //MARK:- Internal
 
@@ -278,21 +450,22 @@ public class NetService {
         delegate?.netServiceDidPublish(self)
     }
 
-    fileprivate func didNotPublish(error: DNSServiceErrorType) {
+    fileprivate func didNotPublish(error: Int) {
         delegate?.netService(self, didNotPublish: [
-            "NSNetServicesErrorDomain": NSNumber(value: 10),
-            "NSNetServicesErrorCode": NSNumber(value: error)
+            NetService.errorDomain: NSNumber(value: 10),
+            NetService.errorCode: NSNumber(value: error)
         ])
     }
 
-    fileprivate func didNotResolve(error: DNSServiceErrorType) {
+    fileprivate func didNotResolve(error: Int) {
         delegate?.netService(self, didNotResolve: [
-            "NSNetServicesErrorDomain": NSNumber(value: 10),
-            "NSNetServicesErrorCode": NSNumber(value: error)
+            NetService.errorDomain: NSNumber(value: 10),
+            NetService.errorCode: NSNumber(value: error)
         ])
     }
 
     fileprivate func didResolveAddress(host: String, port: UInt16, textRecord: Data?) {
+        self.hostName = host
         self.port = Int(port)
         self.textRecord = textRecord
 
