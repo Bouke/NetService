@@ -2,7 +2,6 @@ import struct Foundation.Data
 import struct Foundation.Date
 import class Foundation.DateFormatter
 import class Foundation.NSNumber
-import NetService
 
 #if os(macOS)
     import Darwin
@@ -10,11 +9,19 @@ import NetService
     import Glibc
 #endif
 
-class BaseDelegate {
+#if USE_FOUNDATION
+    import Foundation
+    class _BaseDelegate: NSObject { }
+#else
+    import NetService
+    class _BaseDelegate { init() { } }
+#endif
+
+class BaseDelegate : _BaseDelegate {
     let timeFormatter = DateFormatter()
     let dateFormatter = DateFormatter()
 
-    init() {
+    override init() {
         timeFormatter.dateFormat = "HH:mm:ss.sss"
         dateFormatter.dateStyle = .full
     }

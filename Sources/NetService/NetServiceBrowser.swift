@@ -134,9 +134,8 @@ public class NetServiceBrowser {
         guard serviceRef == nil else {
             return didNotSearch(error: -72003) // CFNetServiceErrorInProgress
         }
-        assert(domain == "", "Only empty domain supported for now (all domains)")
         browse {
-            DNSServiceBrowse(&serviceRef, 0, 0, type, nil, _browseCallback, Unmanaged.passUnretained(self).toOpaque())
+            DNSServiceBrowse(&serviceRef, 0, 0, type, domain, _browseCallback, Unmanaged.passUnretained(self).toOpaque())
         }
     }
 

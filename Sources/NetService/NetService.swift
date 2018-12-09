@@ -224,7 +224,7 @@ public class NetService {
     }
 
     //TODO: implement timeout!
-    func resolve(withTimeout timeout: TimeInterval) {
+    public func resolve(withTimeout timeout: TimeInterval) {
         guard serviceRef == nil else {
             return didNotResolve(error: -72003) // CFNetServiceErrorInProgress
         }

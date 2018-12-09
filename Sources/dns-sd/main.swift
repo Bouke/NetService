@@ -2,8 +2,14 @@ import struct Foundation.Data
 import struct Foundation.Date
 import class Foundation.DispatchQueue
 import class Foundation.RunLoop
-import NetService
-import Utility
+import var Basic.stdoutStream
+import class Utility.ArgumentParser
+
+#if USE_FOUNDATION
+    import Foundation
+#else
+    import NetService
+#endif
 
 #if os(macOS)
     import Darwin
@@ -23,7 +29,11 @@ let browse = parser.add(option: "-B", kind: [String].self,
                         usage: "       <Type> <Domain>                     (Browse for service instances)")
 let resolve = parser.add(option: "-L", kind: [String].self,
                          usage: "<Name> <Type> <Domain>                       (Resolve a service instance)")
-let result = try parser.parse(Array(CommandLine.arguments.dropFirst()))
+
+guard let result = try? parser.parse(Array(CommandLine.arguments.dropFirst())) else {
+    parser.printUsage(on: stdoutStream)
+    exit(-1)
+}
 
 var keepRunning = true
 signal(SIGINT) { _ in
@@ -62,7 +72,7 @@ if result.get(enumerateBrowsingDomains) != nil {
 
 if let register = result.get(register) {
     guard register.count >= 4, let port = Int32(register[3]) else {
-        print("Usage: dns-sd -R <Name> <Type> <Domain> <Port> [<TXT>...]")
+        parser.printUsage(on: stdoutStream)
         exit(-1)
     }
     let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
@@ -104,7 +114,7 @@ if let browse = result.get(browse) {
 
 if let resolve = result.get(resolve) {
     guard resolve.count >= 2 else {
-        print("Usage: dns-sd -L <Name> <Type> <Domain>")
+        parser.printUsage(on: stdoutStream)
         exit(-1)
     }
     let domain = resolve.count == 3 ? resolve[2] : "local."
@@ -112,7 +122,7 @@ if let resolve = result.get(resolve) {
     let service = NetService(domain: domain, type: resolve[1], name: resolve[0])
     let delegate = ResolveServiceDelegate()
     service.delegate = delegate
-    service.resolve()
+    service.resolve(withTimeout: 5)
     withExtendedLifetime([service, delegate]) {
         while keepRunning {
             _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
