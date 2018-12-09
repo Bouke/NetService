@@ -5,6 +5,7 @@ import CoreFoundation
 import struct Foundation.Data
 import class Foundation.NSNumber
 import class Foundation.RunLoop
+import struct Foundation.RunLoopMode
 
 import Cdns_sd
 
@@ -205,7 +206,7 @@ public class NetServiceBrowser {
     /// You can use this method in conjunction with `remove(from:forMode:)` to transfer the receiver to a run loop other than the default one. You should not attempt to run the receiver on multiple run loops.
     ///
     /// Not implemented.
-    public func schedule(`in` aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+    public func schedule(`in` aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         NSUnimplemented()
     }
 
@@ -219,7 +220,7 @@ public class NetServiceBrowser {
     /// You can use this method in conjunction with `schedule(in:forMode:)` to transfer the receiver to a run loop other than the default one. Although it is possible to remove an `NSNetService` object completely from any run loop and then attempt actions on it, you must not do it.
     ///
     /// Not implemented.
-    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         NSUnimplemented()
     }
 

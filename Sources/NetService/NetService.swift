@@ -7,6 +7,7 @@ import class Foundation.InputStream
 import class Foundation.OutputStream
 import class Foundation.NSNumber
 import class Foundation.RunLoop
+import struct Foundation.RunLoopMode
 import struct Foundation.TimeInterval
 
 import Cdns_sd
@@ -245,7 +246,7 @@ public class NetService {
     /// You can use this method in conjunction with remove(from:forMode:) to transfer a service to a different run loop. You should not attempt to run a service on multiple run loops.
     ///
     /// Not implemented.
-    public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+    public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         NSUnimplemented()
     }
 
@@ -258,7 +259,7 @@ public class NetService {
     /// You can use this method in conjunction with schedule(in:forMode:) to transfer the service to a different run loop. Although it is possible to remove an NSNetService object completely from any run loop and then attempt actions on it, it is an error to do so.
     ///
     /// Not implemented.
-    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
         NSUnimplemented()
     }
 
