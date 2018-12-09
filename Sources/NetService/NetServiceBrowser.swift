@@ -12,7 +12,7 @@ import Cdns_sd
 fileprivate let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interfaceIndex, errorCode, name, regtype, domain, context) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
-        browser.didNotSearch(error: errorCode)
+        browser.didNotSearch(error: Int(errorCode))
         return
     }
     let name = String(cString: name!)
@@ -35,7 +35,7 @@ fileprivate let _processResult: CFSocketCallBack = { (s, type, address, data, in
 fileprivate let _enumDomainsReply: DNSServiceDomainEnumReply = { (sdRef, flags, interfaceIndex, errorCode, replyDomain, context) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
-        browser.didNotSearch(error: errorCode)
+        browser.didNotSearch(error: Int(errorCode))
         return
     }
     let flags = ServiceFlags(rawValue: flags)
@@ -98,6 +98,9 @@ public class NetServiceBrowser {
     /// actual implementation from Apple does, and thus this implementation does
     /// as well.
     public func searchForBrowsableDomains() {
+        guard serviceRef == nil else {
+            return didNotSearch(error: NetService.ErrorCode.activityInProgress.rawValue)
+        }
         browse {
             DNSServiceEnumerateDomains(&serviceRef, ServiceFlags.browseDomains.rawValue, 0, _enumDomainsReply, Unmanaged.passUnretained(self).toOpaque())
         }
@@ -114,6 +117,9 @@ public class NetServiceBrowser {
     /// is sufficient to publish a service with the empty string, which registers
     /// it in any available registration domains automatically.
     public func searchForRegistrationDomains() {
+        guard serviceRef == nil else {
+            return didNotSearch(error: NetService.ErrorCode.activityInProgress.rawValue)
+        }
         browse {
             DNSServiceEnumerateDomains(&serviceRef, ServiceFlags.registrationDomains.rawValue, 0, _enumDomainsReply, Unmanaged.passUnretained(self).toOpaque())
         }
@@ -145,7 +151,7 @@ public class NetServiceBrowser {
     /// service, but do not rely on this for resolution.</s>
     public func searchForServices(ofType type: String, inDomain domain: String) {
         guard serviceRef == nil else {
-            return didNotSearch(error: -72003) // CFNetServiceErrorInProgress
+            return didNotSearch(error: NetService.ErrorCode.activityInProgress.rawValue)
         }
         browse {
             DNSServiceBrowse(&serviceRef, 0, 0, type, domain, _browseCallback, Unmanaged.passUnretained(self).toOpaque())
@@ -154,14 +160,11 @@ public class NetServiceBrowser {
 
     func browse(setup: () -> DNSServiceErrorType) {
         delegate?.netServiceBrowserWillSearch(self)
-
         let error = setup()
-
         guard error == 0 else {
-            didNotSearch(error: error)
+            didNotSearch(error: Int(error))
             return
         }
-
         start()
     }
 
@@ -172,7 +175,6 @@ public class NetServiceBrowser {
         let info = Unmanaged.passUnretained(self).toOpaque()
 
         var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
-
         socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketReadCallBack), _processResult, &context)
 
         // Don't close the underlying socket on invalidate, as it is owned by dns_sd.
@@ -226,10 +228,10 @@ public class NetServiceBrowser {
 
     //MARK:- Internal
 
-    fileprivate func didNotSearch(error: DNSServiceErrorType) {
+    fileprivate func didNotSearch(error: Int) {
         delegate?.netServiceBrowser(self, didNotSearch: [
-            "NSNetServicesErrorDomain": NSNumber(value: 10),
-            "NSNetServicesErrorCode": NSNumber(value: error)
+            NetService.errorDomain: NSNumber(value: 10),
+            NetService.errorCode: NSNumber(value: error)
         ])
     }
 
