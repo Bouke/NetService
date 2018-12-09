@@ -15,7 +15,6 @@ let package = Package(
     targets: [
         .target(name: "NetService", dependencies: []),
         .target(name: "dns-sd", dependencies: ["NetService", "Utility"]),
-        .target(name: "demo-service", dependencies: ["NetService"]),
         .testTarget(name: "NetServiceTests", dependencies: ["NetService"]),
     ],
     swiftLanguageVersions: [4]
