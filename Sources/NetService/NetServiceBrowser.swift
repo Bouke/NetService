@@ -4,6 +4,8 @@ import CoreFoundation
 
 import struct Foundation.Data
 import class Foundation.NSNumber
+import class Foundation.RunLoop
+
 import Cdns_sd
 
 fileprivate let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interfaceIndex, errorCode, name, regtype, domain, context) in
@@ -71,6 +73,16 @@ public class NetServiceBrowser {
 
     /// The delegate object for this instance.
     public weak var delegate: NetServiceBrowserDelegate?
+
+    /// Whether to browse over peer-to-peer Bluetooth and Wi-Fi, if available. false, by default.
+    ///
+    /// This property must be set before initiating a search to have an effect.
+    ///
+    /// Not implemented.
+    public var includesPeerToPeer: Bool {
+        get { NSUnimplemented() }
+        set { NSUnimplemented() }
+    }
 
     // MARK: Using Network Service Browsers
 
@@ -173,7 +185,7 @@ public class NetServiceBrowser {
 
     /// Halts a currently running search or resolution.
     ///
-    /// This method sends a netServiceBrowserDidStopSearch(_:) message to the delegate and causes the browser to discard any pending search results.
+    /// This method sends a `netServiceBrowserDidStopSearch(_:)` message to the delegate and causes the browser to discard any pending search results.
     public func stop() {
         assert(serviceRef != nil, "Browser already stopped")
         CFRunLoopSourceInvalidate(source)
@@ -182,28 +194,57 @@ public class NetServiceBrowser {
         delegate?.netServiceBrowserDidStopSearch(self)
     }
 
+    // MARK: Managing Run Loops
+
+    /// Adds the receiver to the specified run loop.
+    ///
+    /// - Parameters:
+    ///   - runLoop: Run loop in which to schedule the receiver.
+    ///   - runLoopMode: Run loop mode in which to perform this operation, such as `default`. See the Run Loop Modes section of the `RunLoop` class for other run loop mode values.
+    ///
+    /// You can use this method in conjunction with `remove(from:forMode:)` to transfer the receiver to a run loop other than the default one. You should not attempt to run the receiver on multiple run loops.
+    ///
+    /// Not implemented.
+    public func schedule(`in` aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+        NSUnimplemented()
+    }
+
+    /// Removes the receiver from the specified run loop.
+    ///
+    /// - Parameters:
+    ///   - runLoop: Run loop from which to remove the receiver.
+    ///   - runLoopMode: Run loop mode in which to perform this operation, such as `default`. See the Run Loop Modes section of the `RunLoop` class for other run loop mode values.
+    ///
+    /// - Discussion:
+    /// You can use this method in conjunction with `schedule(in:forMode:)` to transfer the receiver to a run loop other than the default one. Although it is possible to remove an `NSNetService` object completely from any run loop and then attempt actions on it, you must not do it.
+    ///
+    /// Not implemented.
+    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+        NSUnimplemented()
+    }
+
     //MARK:- Internal
 
-    func didNotSearch(error: DNSServiceErrorType) {
+    fileprivate func didNotSearch(error: DNSServiceErrorType) {
         delegate?.netServiceBrowser(self, didNotSearch: [
             "NSNetServicesErrorDomain": NSNumber(value: 10),
             "NSNetServicesErrorCode": NSNumber(value: error)
         ])
     }
 
-    func didFind(service: NetService, moreComing: Bool) {
+    fileprivate func didFind(service: NetService, moreComing: Bool) {
         delegate?.netServiceBrowser(self, didFind: service, moreComing: moreComing)
     }
 
-    func didRemove(service: NetService, moreComing: Bool) {
+    fileprivate func didRemove(service: NetService, moreComing: Bool) {
         delegate?.netServiceBrowser(self, didRemove: service, moreComing: moreComing)
     }
 
-    func didFind(domain: String, moreComing: Bool) {
+    fileprivate func didFind(domain: String, moreComing: Bool) {
         delegate?.netServiceBrowser(self, didFindDomain: domain, moreComing: moreComing)
     }
 
-    func didRemove(domain: String, moreComing: Bool) {
+    fileprivate func didRemove(domain: String, moreComing: Bool) {
         delegate?.netServiceBrowser(self, didRemoveDomain: domain, moreComing: moreComing)
     }
 

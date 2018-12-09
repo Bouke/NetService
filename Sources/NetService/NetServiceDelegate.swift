@@ -79,7 +79,7 @@ public protocol NetServiceDelegate: class {
 public extension NetServiceDelegate {
     func netServiceWillPublish(_ sender: NetService) { }
     func netService(_ sender: NetService,
-                    didNotPublish error: NetServiceError) { }
+                    didNotPublish errorDict: [String : NSNumber]) { }
     func netServiceDidPublish(_ sender: NetService) { }
     func netServiceWillResolve(_ sender: NetService) { }
     func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) { }

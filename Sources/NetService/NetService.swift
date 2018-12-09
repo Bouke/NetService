@@ -1,3 +1,5 @@
+// Documentation © Apple, Inc.
+
 import CoreFoundation
 
 import struct Foundation.Data
@@ -166,7 +168,9 @@ public class NetService {
     /// Specifies whether to also publish, resolve, or monitor this service over peer-to-peer Bluetooth and Wi-Fi, if available. `false` by default.
     ///
     /// This property must be set before calling `publish()` or `publish(options:)`, `resolve(withTimeout:)`, or `startMonitoring()` in order to take effect.
-    public var includedPeerToPeer: Bool {
+    ///
+    /// Not implemented.
+    public var includesPeerToPeer: Bool {
         get { NSUnimplemented() }
         set { NSUnimplemented() }
     }
