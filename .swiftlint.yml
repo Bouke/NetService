@@ -9,3 +9,6 @@ disabled_rules:
 included:
   - Sources
   - Tests
+type_name:
+  excluded:
+    - _BaseDelegate

@@ -12,7 +12,7 @@ import struct Foundation.TimeInterval
 
 import Cdns_sd
 
-fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
+private let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         service.didNotPublish(error: Int(errorCode))
@@ -31,7 +31,7 @@ fileprivate let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, er
     #endif
 }
 
-fileprivate let _resolveReply: DNSServiceResolveReply = { sdRef, flags, interfaceIndex, errorCode, fullname, hosttarget, port, txtLen, txtRecord, context in
+private let _resolveReply: DNSServiceResolveReply = { sdRef, flags, interfaceIndex, errorCode, fullname, hosttarget, port, txtLen, txtRecord, context in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         service.didNotResolve(error: Int(errorCode))
@@ -46,7 +46,7 @@ fileprivate let _resolveReply: DNSServiceResolveReply = { sdRef, flags, interfac
         textRecord: textRecord)
 }
 
-fileprivate let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
+private let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
     let service: NetService = Unmanaged.fromOpaque(info!).takeUnretainedValue()
     service.processResult()
 }
@@ -54,11 +54,11 @@ fileprivate let _processResult: CFSocketCallBack = { (s, type, address, data, in
 public class NetService {
     private var fqdn: String
 
-    private var serviceRef: DNSServiceRef? = nil
+    private var serviceRef: DNSServiceRef?
     private var records: [DNSRecordRef] = []
-    private var textRecord: Data? = nil
-    private var socket: CFSocket? = nil
-    private var source: CFRunLoopSource? = nil
+    private var textRecord: Data?
+    private var socket: CFSocket?
+    private var source: CFRunLoopSource?
 
     // MARK: Creating Network Services
 
@@ -120,7 +120,7 @@ public class NetService {
     ///
     /// - Return Value:
     ///   An NSData object representing TXT data formed from txtDictionary. Fails an assertion if txtDictionary cannot be represented as an NSData object.
-    public class func data(fromTXTRecord txtDictionary: [String : Data]) -> Data {
+    public class func data(fromTXTRecord txtDictionary: [String: Data]) -> Data {
         return txtDictionary.reduce(Data()) {
             let attr = "\($1.key)=".utf8 + $1.value
             return $0 + Data([UInt8(attr.count)]) + Data(attr)
@@ -136,7 +136,7 @@ public class NetService {
     /// A dictionary representing txtData. The dictionary’s keys are NSString objects using UTF8 encoding. The values associated with all the dictionary’s keys are NSData objects that encapsulate strings or data.
     ///
     /// Fails an assertion if txtData cannot be represented as an NSDictionary object.
-    public class func dictionary(fromTXTRecord txtData: Data) -> [String : Data] {
+    public class func dictionary(fromTXTRecord txtData: Data) -> [String: Data] {
         var txtDictionary: [String: Data] = [:]
         var position = 0
         while position < txtData.count {
@@ -448,7 +448,7 @@ public class NetService {
         public static let listenForConnections = Options(rawValue: 2)
     }
 
-    //MARK:- Internal
+    // MARK: - Internal
 
     fileprivate func didPublish(name: String) {
         self.name = name
@@ -475,7 +475,7 @@ public class NetService {
         self.textRecord = textRecord
 
         // resolve hostname
-        var res: UnsafeMutablePointer<addrinfo>? = nil
+        var res: UnsafeMutablePointer<addrinfo>?
         let error = getaddrinfo(host, "\(port)", nil, &res)
         guard error == 0 else {
             didNotResolve(error: -1)

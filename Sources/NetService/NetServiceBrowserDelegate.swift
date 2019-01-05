@@ -101,4 +101,3 @@ public extension NetServiceBrowserDelegate {
 
     func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) { }
 }
-

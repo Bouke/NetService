@@ -9,7 +9,7 @@ import struct Foundation.RunLoopMode
 
 import Cdns_sd
 
-fileprivate let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interfaceIndex, errorCode, name, regtype, domain, context) in
+private let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interfaceIndex, errorCode, name, regtype, domain, context) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         browser.didNotSearch(error: Int(errorCode))
@@ -27,12 +27,12 @@ fileprivate let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interf
     }
 }
 
-fileprivate let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
+private let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(info!).takeUnretainedValue()
     browser.processResult()
 }
 
-fileprivate let _enumDomainsReply: DNSServiceDomainEnumReply = { (sdRef, flags, interfaceIndex, errorCode, replyDomain, context) in
+private let _enumDomainsReply: DNSServiceDomainEnumReply = { (sdRef, flags, interfaceIndex, errorCode, replyDomain, context) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         browser.didNotSearch(error: Int(errorCode))
@@ -57,9 +57,9 @@ fileprivate let _enumDomainsReply: DNSServiceDomainEnumReply = { (sdRef, flags, 
 ///
 /// <s>The NSNetServiceBrowser class provides two ways to search for domains. In most cases, your client should use the `searchForRegistrationDomains()` method to search only for local domains to which the host machine has registration authority. This is the preferred method for accessing domains as it guarantees that the host machine can connect to services in the returned domains. Access to domains outside this list may be more limited.</s>
 public class NetServiceBrowser {
-    private var serviceRef: DNSServiceRef? = nil
-    private var socket: CFSocket? = nil
-    private var source: CFRunLoopSource? = nil
+    private var serviceRef: DNSServiceRef?
+    private var socket: CFSocket?
+    private var source: CFRunLoopSource?
 
     // MARK: Creating Network Service Browsers
 
@@ -226,7 +226,7 @@ public class NetServiceBrowser {
         NSUnimplemented()
     }
 
-    //MARK:- Internal
+    // MARK: - Internal
 
     fileprivate func didNotSearch(error: Int) {
         delegate?.netServiceBrowser(self, didNotSearch: [

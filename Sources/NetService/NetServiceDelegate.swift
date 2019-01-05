@@ -20,7 +20,7 @@ public protocol NetServiceDelegate: class {
     ///   - sender: The service that could not be published.
     ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys NSNetServicesErrorCode and NSNetServicesErrorDomain.</s>
     func netService(_ sender: NetService,
-                    didNotPublish errorDict: [String : NSNumber])
+                    didNotPublish errorDict: [String: NSNumber])
 
     /// Notifies the delegate that a service was successfully published.
     ///
@@ -41,7 +41,7 @@ public protocol NetServiceDelegate: class {
     /// - Parameters:
     ///   - sender: The service that did not resolve.
     ///   - error: An `Error` containing information about the problem. <s>The dictionary contains the keys errorCode and errorDomain.</s>
-    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber])
+    func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber])
 
     /// Informs the delegate that the address for a given service was resolved.
     ///
@@ -75,14 +75,14 @@ public protocol NetServiceDelegate: class {
 //                    didAcceptConnectionWith socket: Socket)
 }
 
-// MARK:- Default Implementation
+// MARK: - Default Implementation
 public extension NetServiceDelegate {
     func netServiceWillPublish(_ sender: NetService) { }
     func netService(_ sender: NetService,
-                    didNotPublish errorDict: [String : NSNumber]) { }
+                    didNotPublish errorDict: [String: NSNumber]) { }
     func netServiceDidPublish(_ sender: NetService) { }
     func netServiceWillResolve(_ sender: NetService) { }
-    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) { }
+    func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) { }
     func netServiceDidResolveAddress(_ sender: NetService) { }
     func netServiceDidStop(_ sender: NetService) { }
 }

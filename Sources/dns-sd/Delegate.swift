@@ -17,7 +17,7 @@ import class Foundation.NSNumber
     class _BaseDelegate { init() { } }
 #endif
 
-class BaseDelegate : _BaseDelegate {
+class BaseDelegate: _BaseDelegate {
     let timeFormatter = DateFormatter()
     let dateFormatter = DateFormatter()
 
@@ -39,15 +39,15 @@ class BaseDelegate : _BaseDelegate {
         print("\(time())  ...STARTING...")
     }
 
-    //MARK:- NetServiceBrowserDelegate
+    // MARK: - NetServiceBrowserDelegate
 
-    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
+    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
         print("Did not search: \(errorDict)")
     }
 
-    //MARK:- NetServiceDelegate
+    // MARK: - NetServiceDelegate
 
-    func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
+    func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
         print("DNSService call failed \(errorDict)")
     }
 }
@@ -127,7 +127,7 @@ class ResolveServiceDelegate: BaseDelegate, NetServiceDelegate {
     func netServiceWillResolve(_ sender: NetService) {
         starting()
     }
-    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
+    func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
         print("DNSService call failed \(errorDict)")
     }
     func netServiceDidResolveAddress(_ sender: NetService) {

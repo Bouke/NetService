@@ -76,7 +76,7 @@ if let register = result.get(register) {
         exit(-1)
     }
     let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
-    let keyvalues : [String: Data] = Dictionary(items: register.dropFirst(4).map {
+    let keyvalues: [String: Data] = Dictionary(items: register.dropFirst(4).map {
         let (key, value) = $0.split(around: "=")
         return (key, value!.data(using: .utf8)!)
     })
