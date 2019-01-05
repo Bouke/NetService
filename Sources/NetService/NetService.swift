@@ -284,6 +284,14 @@ public class NetService {
             return didNotPublish(error: ErrorCode.activityInProgress.rawValue)
         }
 
+        guard port > 0 || options.contains(.listenForConnections) else {
+            return didNotPublish(error: ErrorCode.badArgumentError.rawValue)
+        }
+
+        if options.contains(.noAutoRename) || options.contains(.listenForConnections) {
+            NSUnimplemented("")
+        }
+
         delegate?.netServiceWillPublish(self)
 
         // TODO: map flags
@@ -322,7 +330,8 @@ public class NetService {
     ///
     /// - Discussion:
     /// During the resolve period, the service sends `netServiceDidResolveAddress(_:)` to the delegate for each address it discovers that matches the service parameters. Once the timeout is hit, the service sends `netServiceDidStop(_:)` to the delegate. If no addresses resolve during the timeout period, the service sends `netService(_:didNotResolve:)` to the delegate.
-    //TODO: implement timeout!
+    ///
+    /// TODO: implement timeout!
     public func resolve(withTimeout timeout: TimeInterval) {
         guard serviceRef == nil else {
             return didNotResolve(error: ErrorCode.activityInProgress.rawValue)
@@ -438,6 +447,8 @@ public class NetService {
         }
 
         /// Specifies that the network service should not rename itself in the event of a name collision.
+        ///
+        /// Not implemented.
         public static let noAutoRename = Options(rawValue: 1)
 
         /// Specifies that a TCP listener should be started for both IPv4 and IPv6 on the port specified by this service. If the listening port can't be opened, the service calls its delegate’s `netService(_:didNotPublish:)` method to report the error.
@@ -445,6 +456,8 @@ public class NetService {
         /// The listener supports only TCP connections. <s>If the service’s type does not end with _tcp, publication fails with badArgumentError.</s>
         ///
         /// Whenever a client connects to the listening socket, the service calls its delegate’s `netService(_:didAcceptConnectionWith:outputStream:)` method with a `Socket` object.
+        ///
+        /// Not implemented.
         public static let listenForConnections = Options(rawValue: 2)
     }
 
