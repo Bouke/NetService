@@ -50,7 +50,7 @@ if result.get(enumerateRegistrationDomains) != nil {
     browser.searchForRegistrationDomains()
     withExtendedLifetime([browser, delegate]) {
         while keepRunning {
-            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+            _ = RunLoop.main.run(mode: .default, before: Date.distantFuture)
         }
     }
     browser.stop()
@@ -64,7 +64,7 @@ if result.get(enumerateBrowsingDomains) != nil {
     browser.searchForBrowsableDomains()
     withExtendedLifetime([browser, delegate]) {
         while keepRunning {
-            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+            _ = RunLoop.main.run(mode: .default, before: Date.distantFuture)
         }
     }
     browser.stop()
@@ -90,7 +90,7 @@ if let register = result.get(register) {
     service.publish()
     withExtendedLifetime([service, delegate]) {
         while keepRunning {
-            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+            _ = RunLoop.main.run(mode: .default, before: Date.distantFuture)
         }
     }
     service.stop()
@@ -106,7 +106,7 @@ if let browse = result.get(browse) {
     browser.searchForServices(ofType: serviceType, inDomain: domain)
     withExtendedLifetime([browser, delegate]) {
         while keepRunning {
-            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+            _ = RunLoop.main.run(mode: .default, before: Date.distantFuture)
         }
     }
     browser.stop()
@@ -125,7 +125,7 @@ if let resolve = result.get(resolve) {
     service.resolve(withTimeout: 5)
     withExtendedLifetime([service, delegate]) {
         while keepRunning {
-            _ = RunLoop.main.run(mode: .defaultRunLoopMode, before: Date.distantFuture)
+            _ = RunLoop.main.run(mode: .default, before: Date.distantFuture)
         }
     }
     service.stop()
