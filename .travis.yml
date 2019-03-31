@@ -44,5 +44,5 @@ matrix:
       osx_image: xcode10.2
       before_install:
         - brew update
-        - brew upgrade swiftlint
+        - brew upgrade swiftlint || true
       script: swiftlint --strict
