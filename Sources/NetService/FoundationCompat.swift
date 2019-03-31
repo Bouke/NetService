@@ -3,7 +3,7 @@ import class Foundation.RunLoop
 import struct Foundation.RunLoopMode
 
 extension RunLoop {
-    typealias Mode = RunLoopMode
+    public typealias Mode = RunLoopMode
 }
 
 extension RunLoopMode {
