@@ -1,9 +1,14 @@
-#if os(Linux) && swift(<5.0)
-extension RunLoop.Mode {
-    var `default`: RunLoop.Mode {
-        get {
-            return RunLoop.Mode.defaultRunLoopMode
-        }
+#if os(Linux) && !compiler(>=5.0)
+import class Foundation.RunLoop
+import struct Foundation.RunLoopMode
+
+extension RunLoop {
+    typealias Mode = RunLoopMode
+}
+
+extension RunLoopMode {
+    static var `default`: RunLoopMode {
+        return RunLoopMode.defaultRunLoopMode
     }
 }
 #endif
