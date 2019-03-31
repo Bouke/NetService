@@ -84,6 +84,7 @@ public class NetServiceBrowser {
     /// Not implemented.
     public var includesPeerToPeer: Bool {
         get { NSUnimplemented() }
+        // swiftlint:disable:next unused_setter_value
         set { NSUnimplemented() }
     }
 
