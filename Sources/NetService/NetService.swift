@@ -249,15 +249,9 @@ public class NetService {
     /// You can use this method in conjunction with remove(from:forMode:) to transfer a service to a different run loop. You should not attempt to run a service on multiple run loops.
     ///
     /// Not implemented.
-    #if os(macOS) || compiler(>=5.0)
     public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
         NSUnimplemented()
     }
-    #else
-    public func schedule(in aRunLoop: RunLoop, forMode mode: RunLoopMode) {
-        NSUnimplemented()
-    }
-    #endif
 
     /// Removes the service from the given run loop for a given mode.
     ///
@@ -268,15 +262,9 @@ public class NetService {
     /// You can use this method in conjunction with schedule(in:forMode:) to transfer the service to a different run loop. Although it is possible to remove an NSNetService object completely from any run loop and then attempt actions on it, it is an error to do so.
     ///
     /// Not implemented.
-    #if os(macOS) || compiler(>=5.0)
     public func remove(from aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
         NSUnimplemented()
     }
-    #else
-    public func remove(from aRunLoop: RunLoop, forMode mode: RunLoopMode) {
-        NSUnimplemented()
-    }
-    #endif
 
     // MARK: Using Network Services
 
