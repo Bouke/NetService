@@ -1,7 +1,6 @@
 language: generic
 sudo: required
 script:
-  - echo $PATH
   - swift test
   - swift run dns-sd --help
   - timeout --preserve-status -s INT --kill-after 10 5 swift run dns-sd -B _hap._tcp
