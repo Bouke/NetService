@@ -2,37 +2,33 @@ import struct Foundation.Data
 import struct Foundation.Date
 import class Foundation.DispatchQueue
 import class Foundation.RunLoop
-import var Basic.stdoutStream
-import class SPMUtility.ArgumentParser
 
 #if USE_FOUNDATION
-    import Foundation
+import Foundation
 #else
-    import NetService
+import NetService
 #endif
 
 #if os(macOS)
-    import Darwin
+import Darwin
 #elseif os(Linux)
-    import Dispatch
-    import Glibc
+import Dispatch
+import Glibc
 #endif
 
-let parser = ArgumentParser(commandName: "dns-sd", usage: "", overview: "", seeAlso: "")
-let enumerateRegistrationDomains = parser.add(option: "-E", kind: Bool.self,
-                                              usage: "                             (Enumerate recommended registration domains)")
-let enumerateBrowsingDomains = parser.add(option: "-F", kind: Bool.self,
-                                          usage: "                                 (Enumerate recommended browsing domains)")
-let register = parser.add(option: "-R", kind: [String].self,
-                          usage: "<Name> <Type> <Domain> <Port> [<TXT>...]             (Register a service)")
-let browse = parser.add(option: "-B", kind: [String].self,
-                        usage: "       <Type> <Domain>                     (Browse for service instances)")
-let resolve = parser.add(option: "-L", kind: [String].self,
-                         usage: "<Name> <Type> <Domain>                       (Resolve a service instance)")
+func printUsage() {
+    print("""
+        dns-sd -E                              (Enumerate recommended registration domains)
+        dns-sd -F                                  (Enumerate recommended browsing domains)
+        dns-sd -R <Name> <Type> <Domain> <Port> [<TXT>...]             (Register a service)
+        dns-sd -B        <Type> <Domain>                     (Browse for service instances)
+        dns-sd -L <Name> <Type> <Domain>                       (Resolve a service instance)
+        """)
+}
 
-guard let result = try? parser.parse(Array(CommandLine.arguments.dropFirst())) else {
-    parser.printUsage(on: stdoutStream)
-    exit(-1)
+if CommandLine.arguments.count < 2 {
+    printUsage()
+    exit(0)
 }
 
 var keepRunning = true
@@ -42,7 +38,8 @@ signal(SIGINT) { _ in
     }
 }
 
-if result.get(enumerateRegistrationDomains) != nil {
+switch CommandLine.arguments[1] {
+case "-E":
     print("Looking for recommended registration domains:")
     let browser = NetServiceBrowser()
     let delegate = EnumerateRegistrationDomainsDelegate()
@@ -54,9 +51,8 @@ if result.get(enumerateRegistrationDomains) != nil {
         }
     }
     browser.stop()
-}
-
-if result.get(enumerateBrowsingDomains) != nil {
+    
+case "-F":
     print("Looking for recommended browsing domains:")
     let browser = NetServiceBrowser()
     let delegate = EnumerateBrowsingDomainsDelegate()
@@ -68,18 +64,24 @@ if result.get(enumerateBrowsingDomains) != nil {
         }
     }
     browser.stop()
-}
-
-if let register = result.get(register) {
+    break;
+    
+case "-R":
+    let register = Array(CommandLine.arguments.dropFirst(2))
     guard register.count >= 4, let port = Int32(register[3]) else {
-        parser.printUsage(on: stdoutStream)
+        printUsage()
         exit(-1)
     }
     let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
-    let keyvalues: [String: Data] = Dictionary(items: register.dropFirst(4).map {
-        let (key, value) = $0.spm_split(around: "=")
-        return (key, value!.data(using: .utf8)!)
-    })
+    var keyvalues = [String: Data]()
+    for keyvalue in register.dropFirst(4) {
+        var components = keyvalue.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        if components.count != 2 {
+            print("Invalid key value pair")
+            exit(-1)
+        }
+        keyvalues[String(components[0])] = components[1].data(using: .utf8)!
+    }
     let txtRecord = NetService.data(fromTXTRecord: keyvalues)
     guard service.setTXTRecord(txtRecord) else {
         print("Failed to set text record")
@@ -94,9 +96,13 @@ if let register = result.get(register) {
         }
     }
     service.stop()
-}
-
-if let browse = result.get(browse) {
+    
+case "-B":
+    let browse = Array(CommandLine.arguments.dropFirst(2))
+    guard browse.count >= 1 else {
+        printUsage()
+        exit(-1)
+    }
     print("Browsing for \(browse[0])")
     let browser = NetServiceBrowser()
     let delegate = BrowseServicesDelegate()
@@ -110,11 +116,11 @@ if let browse = result.get(browse) {
         }
     }
     browser.stop()
-}
-
-if let resolve = result.get(resolve) {
+    
+case "-L":
+    let resolve = Array(CommandLine.arguments.dropFirst(2))
     guard resolve.count >= 2 else {
-        parser.printUsage(on: stdoutStream)
+        printUsage()
         exit(-1)
     }
     let domain = resolve.count == 3 ? resolve[2] : "local."
@@ -129,4 +135,9 @@ if let resolve = result.get(resolve) {
         }
     }
     service.stop()
+    
+default:
+    printUsage()
 }
+
+exit(0)
