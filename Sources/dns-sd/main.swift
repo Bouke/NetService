@@ -51,7 +51,7 @@ case "-E":
         }
     }
     browser.stop()
-    
+
 case "-F":
     print("Looking for recommended browsing domains:")
     let browser = NetServiceBrowser()
@@ -64,8 +64,7 @@ case "-F":
         }
     }
     browser.stop()
-    break;
-    
+
 case "-R":
     let register = Array(CommandLine.arguments.dropFirst(2))
     guard register.count >= 4, let port = Int32(register[3]) else {
@@ -96,7 +95,7 @@ case "-R":
         }
     }
     service.stop()
-    
+
 case "-B":
     let browse = Array(CommandLine.arguments.dropFirst(2))
     guard browse.count >= 1 else {
@@ -116,7 +115,7 @@ case "-B":
         }
     }
     browser.stop()
-    
+
 case "-L":
     let resolve = Array(CommandLine.arguments.dropFirst(2))
     guard resolve.count >= 2 else {
@@ -135,7 +134,7 @@ case "-L":
         }
     }
     service.stop()
-    
+
 default:
     printUsage()
 }
