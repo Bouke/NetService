@@ -137,7 +137,7 @@ class ResolveServiceDelegate: BaseDelegate, NetServiceDelegate {
             let txtDictionary = NetService.dictionary(fromTXTRecord: txtRecord).map {
                 ($0, String(data: $1, encoding: .utf8)!)
             }
-            print(" \(Dictionary(items: txtDictionary))")
+            print(" \(Dictionary(uniqueKeysWithValues: txtDictionary))")
         }
     }
     func presentation(_ addresses: [Data]) -> [String] {
