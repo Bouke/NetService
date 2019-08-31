@@ -10,11 +10,11 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/Bouke/Cdns_sd.git", from: "2.0.0"),
-        .package(url: "https://github.com/apple/swift-package-manager.git", from: "0.3.0"),
+        .package(url: "https://github.com/apple/swift-package-manager.git", from: "0.4.0"),
     ],
     targets: [
         .target(name: "NetService", dependencies: []),
-        .target(name: "dns-sd", dependencies: ["NetService", "Utility"]),
+        .target(name: "dns-sd", dependencies: ["NetService", "SPMUtility"]),
         .testTarget(name: "NetServiceTests", dependencies: ["NetService"]),
     ]
 )

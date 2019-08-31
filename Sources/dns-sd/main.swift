@@ -3,7 +3,7 @@ import struct Foundation.Date
 import class Foundation.DispatchQueue
 import class Foundation.RunLoop
 import var Basic.stdoutStream
-import class Utility.ArgumentParser
+import class SPMUtility.ArgumentParser
 
 #if USE_FOUNDATION
     import Foundation
@@ -77,7 +77,7 @@ if let register = result.get(register) {
     }
     let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
     let keyvalues: [String: Data] = Dictionary(items: register.dropFirst(4).map {
-        let (key, value) = $0.split(around: "=")
+        let (key, value) = $0.spm_split(around: "=")
         return (key, value!.data(using: .utf8)!)
     })
     let txtRecord = NetService.data(fromTXTRecord: keyvalues)
