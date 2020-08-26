@@ -1,0 +1,5 @@
+module Cdns_sd [system] {
+    header "shim.h"
+    link "dns_sd"
+    export *
+}
