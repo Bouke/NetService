@@ -10,24 +10,6 @@ script:
   - timeout --preserve-status -s INT --kill-after 10 5 swift run dns-sd -R test _hap._tcp local 8000
 matrix:
   include:
-    - name: Swift 5.0
+    - name: Swift 5.1 on macOS 10.14
       os: osx
-      osx_image: xcode10.3
-      install: PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
-    - name: Swift 5.0
-      os: linux
-      dist: trusty
-      before_install:
-        - sudo apt update
-        - sudo apt install libavahi-compat-libdnssd-dev
-        - wget https://swift.org/builds/swift-5.0-release/ubuntu1404/swift-5.0-RELEASE/swift-5.0-RELEASE-ubuntu14.04.tar.gz
-        - tar xzf swift-5.0-RELEASE-ubuntu14.04.tar.gz
-        - export PATH=`pwd`/swift-5.0-RELEASE-ubuntu14.04/usr/bin:"${PATH}"
-        - sudo hostname travis-ci.local
-    - name: Code Quality Checks
-      os: osx
-      osx_image: xcode10.3
-      before_install:
-        - brew update
-        - brew upgrade swiftlint || true
-      script: swiftlint --strict
+      osx_image: xcode11.3
