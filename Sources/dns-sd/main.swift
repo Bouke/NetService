@@ -74,7 +74,7 @@ case "-R":
     let service = NetService(domain: register[2], type: register[1], name: register[0], port: port)
     var keyvalues = [String: Data]()
     for keyvalue in register.dropFirst(4) {
-        var components = keyvalue.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        let components = keyvalue.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
         if components.count != 2 {
             print("Invalid key value pair")
             exit(-1)

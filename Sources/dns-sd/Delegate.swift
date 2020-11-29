@@ -145,7 +145,7 @@ class ResolveServiceDelegate: BaseDelegate, NetServiceDelegate {
         for memory in addresses {
             var ss = sockaddr_storage()
             _ = memory.withUnsafeBytes {
-                memcpy(&ss, $0, memory.count)
+                memcpy(&ss, $0.baseAddress!, memory.count)
             }
             let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: Int(NI_MAXHOST))
 

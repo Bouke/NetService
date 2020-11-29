@@ -11,7 +11,7 @@ import struct Foundation.RunLoopMode
 
 import Cdns_sd
 
-private let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interfaceIndex, errorCode, name, regtype, domain, context) in
+private let _browseCallback: DNSServiceBrowseReply = { (_, flags, _, errorCode, name, regtype, domain, context) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         browser.didNotSearch(error: Int(errorCode))
@@ -29,12 +29,12 @@ private let _browseCallback: DNSServiceBrowseReply = { (sdRef, flags, interfaceI
     }
 }
 
-private let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
+private let _processResult: CFSocketCallBack = { (_, _, _, _, info) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(info!).takeUnretainedValue()
     browser.processResult()
 }
 
-private let _enumDomainsReply: DNSServiceDomainEnumReply = { (sdRef, flags, interfaceIndex, errorCode, replyDomain, context) in
+private let _enumDomainsReply: DNSServiceDomainEnumReply = { (_, flags, _, errorCode, replyDomain, context) in
     let browser: NetServiceBrowser = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         browser.didNotSearch(error: Int(errorCode))
@@ -178,7 +178,7 @@ public class NetServiceBrowser {
         let info = Unmanaged.passUnretained(self).toOpaque()
 
         var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
-        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketReadCallBack), _processResult, &context)
+        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(CFSocketCallBackType.readCallBack.rawValue), _processResult, &context)
 
         // Don't close the underlying socket on invalidate, as it is owned by dns_sd.
         var socketFlags = CFSocketGetSocketFlags(socket)
@@ -186,7 +186,7 @@ public class NetServiceBrowser {
         CFSocketSetSocketFlags(socket, socketFlags)
 
         source = CFSocketCreateRunLoopSource(nil, socket, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.commonModes)
     }
 
     /// Halts a currently running search or resolution.

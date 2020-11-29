@@ -1,11 +1,6 @@
 import CoreFoundation
 import Cdns_sd
 
-#if !os(Linux)
-    internal let kCFSocketReadCallBack = CFSocketCallBackType.readCallBack.rawValue
-    internal let kCFRunLoopCommonModes = CFRunLoopMode.commonModes
-#endif
-
 struct ServiceFlags: OptionSet {
     public let rawValue: DNSServiceFlags
     init(rawValue: DNSServiceFlags) {

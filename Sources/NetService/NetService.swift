@@ -14,7 +14,7 @@ import struct Foundation.TimeInterval
 
 import Cdns_sd
 
-private let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorCode, name, regtype, domain, context) in
+private let _registerCallback: DNSServiceRegisterReply = { (_, flags, errorCode, name, _, _, context) in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         service.didNotPublish(error: Int(errorCode))
@@ -33,7 +33,7 @@ private let _registerCallback: DNSServiceRegisterReply = { (sdRef, flags, errorC
     #endif
 }
 
-private let _resolveReply: DNSServiceResolveReply = { sdRef, flags, interfaceIndex, errorCode, fullname, hosttarget, port, txtLen, txtRecord, context in
+private let _resolveReply: DNSServiceResolveReply = { _, _, _, errorCode, _, hosttarget, port, txtLen, txtRecord, context in
     let service: NetService = Unmanaged.fromOpaque(context!).takeUnretainedValue()
     guard errorCode == kDNSServiceErr_NoError else {
         service.didNotResolve(error: Int(errorCode))
@@ -48,7 +48,7 @@ private let _resolveReply: DNSServiceResolveReply = { sdRef, flags, interfaceInd
         textRecord: textRecord)
 }
 
-private let _processResult: CFSocketCallBack = { (s, type, address, data, info) in
+private let _processResult: CFSocketCallBack = { (_, _, _, _, info) in
     let service: NetService = Unmanaged.fromOpaque(info!).takeUnretainedValue()
     service.processResult()
 }
@@ -222,9 +222,9 @@ public class NetService {
     public func setTXTRecord(_ recordData: Data?) -> Bool {
         textRecord = recordData
         if let serviceRef = serviceRef {
-            var record = textRecord ?? Data([0])
+            let record = textRecord ?? Data([0])
             let error = record.withUnsafeBytes { txtRecordPtr in
-                DNSServiceUpdateRecord(serviceRef, nil, 0, UInt16(record.count), txtRecordPtr, 0)
+                DNSServiceUpdateRecord(serviceRef, nil, 0, UInt16(record.count), txtRecordPtr.baseAddress!, 0)
             }
             guard error == 0 else {
                 return false
@@ -300,10 +300,10 @@ public class NetService {
         // TODO: map flags
 
         let regtype = self.type
-        var record = textRecord ?? Data([0])
+        let record = textRecord ?? Data([0])
 
         let error = record.withUnsafeBytes { txtRecordPtr in
-            DNSServiceRegister(&serviceRef, 0, 0, name, regtype, nil, nil, UInt16(port).bigEndian, UInt16(record.count), txtRecordPtr, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
+            DNSServiceRegister(&serviceRef, 0, 0, name, regtype, nil, nil, UInt16(port).bigEndian, UInt16(record.count), txtRecordPtr.baseAddress!, _registerCallback, Unmanaged.passUnretained(self).toOpaque())
         }
         guard error == 0 else {
             didNotPublish(error: Int(error))
@@ -356,7 +356,7 @@ public class NetService {
 
         var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
 
-        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketReadCallBack), _processResult, &context)
+        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(CFSocketCallBackType.readCallBack.rawValue), _processResult, &context)
 
         // Don't close the underlying socket on invalidate, as it is owned by dns_sd.
         var socketFlags = CFSocketGetSocketFlags(socket)
@@ -364,7 +364,7 @@ public class NetService {
         CFSocketSetSocketFlags(socket, socketFlags)
 
         source = CFSocketCreateRunLoopSource(nil, socket, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.commonModes)
     }
 
     /// The port on which the service is listening for connections.
