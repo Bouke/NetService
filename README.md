@@ -1,10 +1,8 @@
-# Pure Swift NetService (Bonjour / Zeroconf / mDNS) implementation
+# Swift NetService (Bonjour / Zeroconf / mDNS) implementation for Linux
 
 [![Build Status](https://travis-ci.org/Bouke/NetService.svg?branch=master)](https://travis-ci.org/Bouke/NetService)
 
-This module allows you to publish your own Bonjour service on the local
-network. On macOS NetService is included with Cocoa, however on Linux there's
-no such thing in the standard library.
+This module allows you to publish your own Bonjour service on the local network. On macOS NetService is included with Cocoa, however on Linux there's no such thing in the standard library.
 
 Since version 0.5 this library uses dns_sd as the responder, instead of implementing mDNS itself. On macOS this means that it uses the system-wide daemon, and on Linux one should install `libavahi-compat-libdnssd-dev` to run the system-wide daemon.
 
