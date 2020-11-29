@@ -178,7 +178,7 @@ public class NetServiceBrowser {
         let info = Unmanaged.passUnretained(self).toOpaque()
 
         var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
-        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketReadCallBack), _processResult, &context)
+        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(CFSocketCallBackType.readCallBack.rawValue), _processResult, &context)
 
         // Don't close the underlying socket on invalidate, as it is owned by dns_sd.
         var socketFlags = CFSocketGetSocketFlags(socket)
@@ -186,7 +186,7 @@ public class NetServiceBrowser {
         CFSocketSetSocketFlags(socket, socketFlags)
 
         source = CFSocketCreateRunLoopSource(nil, socket, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.commonModes)
     }
 
     /// Halts a currently running search or resolution.
