@@ -1,5 +1,9 @@
 import CoreFoundation
 
+#if !os(Linux) || compiler(>=5.3)
+internal let kCFSocketReadCallBack = CFSocketCallBackType.readCallBack.rawValue
+#endif
+
 #if os(Linux) && !compiler(>=5.0)
 import class Foundation.RunLoop
 import struct Foundation.RunLoopMode
