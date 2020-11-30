@@ -1,6 +1,6 @@
 import CoreFoundation
 
-#if !os(Linux)
+#if !os(Linux) || compiler(>=5.3)
 internal let kCFSocketReadCallBack = CFSocketCallBackType.readCallBack.rawValue
 #endif
 
