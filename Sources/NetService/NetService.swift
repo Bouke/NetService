@@ -356,7 +356,7 @@ public class NetService {
 
         var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
 
-        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(CFSocketCallBackType.readCallBack.rawValue), _processResult, &context)
+        socket = CFSocketCreateWithNative(nil, fd, CFOptionFlags(kCFSocketReadCallBack), _processResult, &context)
 
         // Don't close the underlying socket on invalidate, as it is owned by dns_sd.
         var socketFlags = CFSocketGetSocketFlags(socket)
